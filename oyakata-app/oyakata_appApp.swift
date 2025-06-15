@@ -12,7 +12,9 @@ import SwiftData
 struct oyakata_appApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            ImageData.self,
+            TaskName.self,
+            MissListItem.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
