@@ -37,50 +37,45 @@ struct MissListView: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // 検索・フィルターセクション
-                VStack(spacing: 12) {
-                    SearchBar(text: $searchText)
-                    
-                    HStack {
-                        Toggle("解決済みを表示", isOn: $showResolved)
-                        Spacer()
-                    }
-                    .padding(.horizontal, horizontalSizeClass == .regular ? 24 : 16)
-                }
-                .padding(.vertical, 8)
-                .background(Color(.systemGroupedBackground))
+        VStack(spacing: 0) {
+            // 検索・フィルターセクション
+            VStack(spacing: 12) {
+                SearchBar(text: $searchText)
                 
-                // ミスリスト表示
-                if filteredItems.isEmpty {
-                    MissListEmptyView()
-                } else {
-                    List {
-                        ForEach(filteredItems, id: \.id) { item in
-                            NavigationLink(destination: MissListDetailView(missItem: item)) {
-                                MissListRowView(missItem: item)
-                            }
-                            .listRowInsets(EdgeInsets(
-                                top: 8, 
-                                leading: horizontalSizeClass == .regular ? 24 : 16, 
-                                bottom: 8, 
-                                trailing: horizontalSizeClass == .regular ? 24 : 16
-                            ))
-                        }
-                        .onDelete(perform: deleteItems)
-                    }
-                    .listStyle(PlainListStyle())
+                HStack {
+                    Toggle("解決済みを表示", isOn: $showResolved)
+                    Spacer()
                 }
+                .padding(.horizontal, 16)
             }
-            .navigationTitle("ミスリスト")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showingAddView = true
-                    }) {
-                        Image(systemName: "plus")
+            .padding(.vertical, 8)
+            .background(Color(.systemGroupedBackground))
+            
+            // ミスリスト表示
+            if filteredItems.isEmpty {
+                MissListEmptyView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(filteredItems, id: \.id) { item in
+                        NavigationLink(destination: MissListDetailView(missItem: item)) {
+                            MissListRowView(missItem: item)
+                        }
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     }
+                    .onDelete(perform: deleteItems)
+                }
+                .listStyle(PlainListStyle())
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("ミスリスト")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showingAddView = true
+                }) {
+                    Image(systemName: "plus")
                 }
             }
         }

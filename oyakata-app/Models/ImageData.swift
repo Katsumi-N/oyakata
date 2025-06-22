@@ -47,6 +47,7 @@ final class ImageData {
     }
     
     private func loadOptimizedImage(from url: URL) -> UIImage? {
+        // PDFファイルの場合は既に画像として保存されているため、通常の画像読み込みを行う
         guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             return nil
         }

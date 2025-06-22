@@ -8,6 +8,8 @@
 import SwiftUI
 import PhotosUI
 import SwiftData
+import UniformTypeIdentifiers
+import PDFKit
 
 struct ImagePickerView: View {
     @Environment(\.modelContext) private var modelContext
@@ -18,6 +20,8 @@ struct ImagePickerView: View {
     @State private var selectedTaskName: TaskName?
     @State private var newTaskName: String = ""
     @State private var showingTaskNameInput = false
+    @State private var showingDocumentPicker = false
+    @State private var selectedDocuments: [URL] = []
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     @Query private var taskNames: [TaskName]
@@ -86,24 +90,41 @@ struct ImagePickerView: View {
                     
                     // 画像選択セクション
                     VStack(spacing: 16) {
-                        PhotosPicker(
-                            selection: $selectedItems,
-                            maxSelectionCount: 10,
-                            matching: .images
-                        ) {
-                            Label("画像を選択", systemImage: "photo.on.rectangle")
-                                .font(.title2)
-                                .frame(maxWidth: .infinity, minHeight: 60)
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
+                        Text("画像を選択")
+                            .font(.headline)
+                            .tracking(0.3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        VStack(spacing: 12) {
+                            PhotosPicker(
+                                selection: $selectedItems,
+                                maxSelectionCount: 10,
+                                matching: .images
+                            ) {
+                                Label("フォトライブラリから選択", systemImage: "photo.on.rectangle")
+                                    .font(.body)
+                                    .frame(maxWidth: .infinity, minHeight: 50)
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+                            
+                            Button("ファイルから選択（画像・PDF）") {
+                                showingDocumentPicker = true
+                            }
+                            .font(.body)
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                         }
                         
-                        if !selectedItems.isEmpty {
+                        let totalSelected = selectedItems.count + selectedDocuments.count
+                        if totalSelected > 0 {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
-                                Text("\(selectedItems.count)枚の画像が選択されています")
+                                Text("\(totalSelected)枚の画像が選択されています")
                                     .foregroundColor(.secondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -128,7 +149,7 @@ struct ImagePickerView: View {
                     Button("保存") {
                         saveImages()
                     }
-                    .disabled(selectedItems.isEmpty)
+                    .disabled(selectedItems.isEmpty && selectedDocuments.isEmpty)
                 }
             }
         }
@@ -141,6 +162,22 @@ struct ImagePickerView: View {
                 createNewTaskName()
             }
         }
+        .fileImporter(
+            isPresented: $showingDocumentPicker,
+            allowedContentTypes: [.image, .pdf],
+            allowsMultipleSelection: true
+        ) { result in
+            handleDocumentPickerResult(result)
+        }
+    }
+    
+    private func handleDocumentPickerResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            selectedDocuments = urls
+        case .failure(let error):
+            print("ファイル選択エラー: \(error)")
+        }
     }
     
     private func createNewTaskName() {
@@ -152,13 +189,39 @@ struct ImagePickerView: View {
     
     private func saveImages() {
         Task {
-            let groupId = selectedItems.count > 1 ? UUID() : nil
-            let groupCreatedAt = selectedItems.count > 1 ? Date() : nil
+            let totalCount = selectedItems.count + selectedDocuments.count
+            let groupId = totalCount > 1 ? UUID() : nil
+            let groupCreatedAt = totalCount > 1 ? Date() : nil
             
+            // PhotosPickerの画像を処理
             for item in selectedItems {
                 if let data = try? await item.loadTransferable(type: Data.self),
                    let uiImage = UIImage(data: data) {
                     await saveImageToDocuments(uiImage, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                }
+            }
+            
+            // DocumentPickerの画像・PDFを処理
+            for documentURL in selectedDocuments {
+                if documentURL.startAccessingSecurityScopedResource() {
+                    defer { documentURL.stopAccessingSecurityScopedResource() }
+                    
+                    do {
+                        if documentURL.pathExtension.lowercased() == "pdf" {
+                            // PDFを画像に変換
+                            if let uiImage = await convertPDFToImage(url: documentURL) {
+                                await saveImageToDocuments(uiImage, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                            }
+                        } else {
+                            // 通常の画像ファイル
+                            let data = try Data(contentsOf: documentURL)
+                            if let uiImage = UIImage(data: data) {
+                                await saveImageToDocuments(uiImage, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                            }
+                        }
+                    } catch {
+                        print("ファイル読み込みエラー: \(error)")
+                    }
                 }
             }
             
@@ -193,6 +256,33 @@ struct ImagePickerView: View {
             }
         } catch {
             print("画像の保存に失敗しました: \(error)")
+        }
+    }
+    
+    private func convertPDFToImage(url: URL) async -> UIImage? {
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard let pdfDocument = PDFDocument(url: url),
+                      let firstPage = pdfDocument.page(at: 0) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                
+                let pageRect = firstPage.bounds(for: .mediaBox)
+                let renderer = UIGraphicsImageRenderer(size: pageRect.size)
+                
+                let image = renderer.image { context in
+                    UIColor.white.set()
+                    context.fill(pageRect)
+                    
+                    context.cgContext.translateBy(x: 0, y: pageRect.size.height)
+                    context.cgContext.scaleBy(x: 1.0, y: -1.0)
+                    
+                    firstPage.draw(with: .mediaBox, to: context.cgContext)
+                }
+                
+                continuation.resume(returning: image)
+            }
         }
     }
     
