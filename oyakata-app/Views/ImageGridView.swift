@@ -31,6 +31,9 @@ struct ImageGridView: View {
     @State private var selectedTag: TagType?
     @State private var selectedTask: TaskName?
     @State private var searchText = ""
+    @State private var showingDeleteAlert = false
+    @State private var groupToDelete: ImageGroup?
+    @State private var imageToDelete: ImageData?
     
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
@@ -117,9 +120,23 @@ struct ImageGridView: View {
                                         NavigationLink(destination: GroupDetailView(group: group)) {
                                             GroupGridItemView(group: group)
                                         }
+                                        .contextMenu {
+                                            Button(role: .destructive) {
+                                                deleteGroup(group)
+                                            } label: {
+                                                Label("グループを削除", systemImage: "trash")
+                                            }
+                                        }
                                     } else {
                                         NavigationLink(destination: ImageDetailView(imageData: group.representativeImage)) {
                                             ImageGridItemView(imageData: group.representativeImage)
+                                        }
+                                        .contextMenu {
+                                            Button(role: .destructive) {
+                                                deleteImage(group.representativeImage)
+                                            } label: {
+                                                Label("画像を削除", systemImage: "trash")
+                                            }
                                         }
                                     }
                                 }
@@ -147,6 +164,72 @@ struct ImageGridView: View {
         }
         .sheet(isPresented: $showingImagePicker) {
             ImagePickerView()
+        }
+        .alert("削除の確認", isPresented: $showingDeleteAlert) {
+            Button("キャンセル", role: .cancel) {
+                groupToDelete = nil
+                imageToDelete = nil
+            }
+            Button("削除", role: .destructive) {
+                if let group = groupToDelete {
+                    performDeleteGroup(group)
+                } else if let image = imageToDelete {
+                    performDeleteImage(image)
+                }
+                groupToDelete = nil
+                imageToDelete = nil
+            }
+        } message: {
+            if let group = groupToDelete {
+                Text("このグループ（\(group.images.count)枚の画像）を削除しますか？この操作は元に戻せません。")
+            } else if let _ = imageToDelete {
+                Text("この画像を削除しますか？この操作は元に戻せません。")
+            }
+        }
+    }
+    
+    private func deleteGroup(_ group: ImageGroup) {
+        groupToDelete = group
+        showingDeleteAlert = true
+    }
+    
+    private func deleteImage(_ image: ImageData) {
+        imageToDelete = image
+        showingDeleteAlert = true
+    }
+    
+    private func performDeleteGroup(_ group: ImageGroup) {
+        do {
+            for imageData in group.images {
+                deleteImageFile(imageData)
+                modelContext.delete(imageData)
+            }
+            try modelContext.save()
+        } catch {
+            print("グループ削除エラー: \(error)")
+        }
+    }
+    
+    private func performDeleteImage(_ imageData: ImageData) {
+        do {
+            deleteImageFile(imageData)
+            modelContext.delete(imageData)
+            try modelContext.save()
+        } catch {
+            print("画像削除エラー: \(error)")
+        }
+    }
+    
+    private func deleteImageFile(_ imageData: ImageData) {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let imageURL = documentsPath.appendingPathComponent(imageData.filePath)
+        
+        do {
+            if FileManager.default.fileExists(atPath: imageURL.path) {
+                try FileManager.default.removeItem(at: imageURL)
+            }
+        } catch {
+            print("ファイル削除エラー: \(error)")
         }
     }
 }
