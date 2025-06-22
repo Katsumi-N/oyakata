@@ -74,7 +74,11 @@ struct ImageDetailView: View {
             }
         }
         .sheet(isPresented: $showingEditView) {
-            ImageEditView(imageData: imageData)
+            NavigationView {
+                ImageEditView(imageData: imageData)
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .alert("画像を削除", isPresented: $showingDeleteAlert) {
             Button("キャンセル", role: .cancel) { }

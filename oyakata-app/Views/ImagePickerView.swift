@@ -152,10 +152,13 @@ struct ImagePickerView: View {
     
     private func saveImages() {
         Task {
+            let groupId = selectedItems.count > 1 ? UUID() : nil
+            let groupCreatedAt = selectedItems.count > 1 ? Date() : nil
+            
             for item in selectedItems {
                 if let data = try? await item.loadTransferable(type: Data.self),
                    let uiImage = UIImage(data: data) {
-                    await saveImageToDocuments(uiImage)
+                    await saveImageToDocuments(uiImage, groupId: groupId, groupCreatedAt: groupCreatedAt)
                 }
             }
             
@@ -165,8 +168,10 @@ struct ImagePickerView: View {
         }
     }
     
-    private func saveImageToDocuments(_ image: UIImage) async {
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
+    private func saveImageToDocuments(_ image: UIImage, groupId: UUID? = nil, groupCreatedAt: Date? = nil) async {
+        // 画像をメモリ効率的にリサイズ
+        let optimizedImage = await optimizeImage(image)
+        guard let imageData = optimizedImage.jpegData(compressionQuality: 0.7) else { return }
         
         let fileName = "\(UUID().uuidString).jpg"
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -180,12 +185,47 @@ struct ImagePickerView: View {
                     fileName: fileName,
                     filePath: fileName,
                     tagType: selectedTag,
-                    taskName: selectedTaskName
+                    taskName: selectedTaskName,
+                    groupId: groupId,
+                    groupCreatedAt: groupCreatedAt
                 )
                 modelContext.insert(imageDataModel)
             }
         } catch {
             print("画像の保存に失敗しました: \(error)")
+        }
+    }
+    
+    private func optimizeImage(_ image: UIImage) async -> UIImage {
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let maxDimension: CGFloat = 2048
+                let size = image.size
+                
+                // リサイズが不要な場合はそのまま返す
+                if max(size.width, size.height) <= maxDimension {
+                    continuation.resume(returning: image)
+                    return
+                }
+                
+                // アスペクト比を保持してリサイズ
+                let aspectRatio = size.width / size.height
+                let newSize: CGSize
+                
+                if size.width > size.height {
+                    newSize = CGSize(width: maxDimension, height: maxDimension / aspectRatio)
+                } else {
+                    newSize = CGSize(width: maxDimension * aspectRatio, height: maxDimension)
+                }
+                
+                // メモリ効率的なリサイズ
+                let renderer = UIGraphicsImageRenderer(size: newSize)
+                let resizedImage = renderer.image { _ in
+                    image.draw(in: CGRect(origin: .zero, size: newSize))
+                }
+                
+                continuation.resume(returning: resizedImage)
+            }
         }
     }
 }

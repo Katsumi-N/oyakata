@@ -8,6 +8,21 @@
 import SwiftUI
 import SwiftData
 
+struct ImageGroup: Identifiable {
+    let id: String
+    let images: [ImageData]
+    let groupId: UUID?
+    let groupCreatedAt: Date
+    
+    var isGroup: Bool {
+        return images.count > 1
+    }
+    
+    var representativeImage: ImageData {
+        return images.first!
+    }
+}
+
 struct ImageGridView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var images: [ImageData]
@@ -31,7 +46,7 @@ struct ImageGridView: View {
         }
     }
     
-    var filteredImages: [ImageData] {
+    var groupedImages: [ImageGroup] {
         var filtered = images
         
         if let tag = selectedTag {
@@ -49,7 +64,32 @@ struct ImageGridView: View {
             }
         }
         
-        return filtered.sorted { $0.createdAt > $1.createdAt }
+        let sortedImages = filtered.sorted { $0.createdAt > $1.createdAt }
+        
+        var groups: [String: [ImageData]] = [:]
+        
+        for image in sortedImages {
+            if let groupId = image.groupId {
+                let key = groupId.uuidString
+                if groups[key] == nil {
+                    groups[key] = []
+                }
+                groups[key]?.append(image)
+            } else {
+                let key = "single_\(image.id.uuidString)"
+                groups[key] = [image]
+            }
+        }
+        
+        return groups.compactMap { (key, images) in
+            guard let firstImage = images.first else { return nil }
+            return ImageGroup(
+                id: key,
+                images: images.sorted { $0.createdAt < $1.createdAt },
+                groupId: firstImage.groupId,
+                groupCreatedAt: firstImage.groupCreatedAt ?? firstImage.createdAt
+            )
+        }.sorted { $0.groupCreatedAt > $1.groupCreatedAt }
     }
     
     var body: some View {
@@ -66,15 +106,21 @@ struct ImageGridView: View {
                         .padding(.horizontal, horizontalSizeClass == .regular ? 24 : 16)
                     
                     // 画像グリッド
-                    if filteredImages.isEmpty {
+                    if groupedImages.isEmpty {
                         EmptyStateView()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 12) {
-                                ForEach(filteredImages, id: \.id) { imageData in
-                                    NavigationLink(destination: ImageDetailView(imageData: imageData)) {
-                                        ImageGridItemView(imageData: imageData)
+                                ForEach(groupedImages) { group in
+                                    if group.isGroup {
+                                        NavigationLink(destination: GroupDetailView(group: group)) {
+                                            GroupGridItemView(group: group)
+                                        }
+                                    } else {
+                                        NavigationLink(destination: ImageDetailView(imageData: group.representativeImage)) {
+                                            ImageGridItemView(imageData: group.representativeImage)
+                                        }
                                     }
                                 }
                             }
@@ -228,6 +274,108 @@ struct ImageGridItemView: View {
                 }
                 
                 if imageData.hasAnnotations {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.orange)
+                            .font(.caption2)
+                        Text("編集済み")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                            .tracking(0.2)
+                    }
+                }
+            }
+            .padding(.horizontal, 6)
+        }
+        .padding(8)
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 3, x: 0, y: 2)
+    }
+}
+
+struct GroupGridItemView: View {
+    let group: ImageGroup
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // 画像スタック
+            ZStack {
+                if let image = group.representativeImage.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(minHeight: 140, maxHeight: 160)
+                        .clipped()
+                        .cornerRadius(8)
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 140)
+                        .cornerRadius(8)
+                        .overlay(
+                            Image(systemName: "photo")
+                                .foregroundColor(.gray)
+                                .font(.title2)
+                        )
+                }
+                
+                // 枚数バッジ（複数画像の場合のみ）
+                if group.images.count > 1 {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text("\(group.images.count)")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.blue.opacity(0.8))
+                                .cornerRadius(12)
+                                .padding(8)
+                        }
+                        Spacer()
+                    }
+                    
+                    // 重なり効果
+                    Rectangle()
+                        .fill(Color.white.opacity(0.3))
+                        .frame(minHeight: 140, maxHeight: 160)
+                        .cornerRadius(8)
+                        .overlay(
+                            Rectangle()
+                                .stroke(Color.white, lineWidth: 2)
+                                .cornerRadius(8)
+                                .offset(x: -3, y: -3)
+                        )
+                        .offset(x: 3, y: 3)
+                }
+            }
+            
+            // メタデータ（「グループ」表示なし）
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: group.representativeImage.tagType.systemImage)
+                        .foregroundColor(.blue)
+                        .font(.caption)
+                    Text(group.representativeImage.tagType.displayName)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .foregroundColor(.primary)
+                        .tracking(0.3)
+                }
+                
+                if let taskName = group.representativeImage.taskName {
+                    Text(taskName.name)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .tracking(0.2)
+                        .lineSpacing(2)
+                }
+                
+                if group.representativeImage.hasAnnotations {
                     HStack(spacing: 4) {
                         Image(systemName: "pencil")
                             .foregroundColor(.orange)
