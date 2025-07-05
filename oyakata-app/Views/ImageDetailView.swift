@@ -15,6 +15,7 @@ struct ImageDetailView: View {
     let imageData: ImageData
     @State private var showingEditView = false
     @State private var showingDeleteAlert = false
+    @State private var showingAddMissView = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -41,6 +42,12 @@ struct ImageDetailView: View {
                         Label("編集", systemImage: "pencil")
                     }
                     
+                    Button(action: {
+                        showingAddMissView = true
+                    }) {
+                        Label("ミスリスト追加", systemImage: "list.bullet.clipboard")
+                    }
+                    
                     Button(role: .destructive, action: {
                         showingDeleteAlert = true
                     }) {
@@ -57,6 +64,9 @@ struct ImageDetailView: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingAddMissView) {
+            AddMissFromImageView(imageData: imageData)
         }
         .alert("画像を削除", isPresented: $showingDeleteAlert) {
             Button("キャンセル", role: .cancel) { }
@@ -125,12 +135,45 @@ struct ImageDetailView: View {
     
     @ViewBuilder
     private var missListSection: some View {
-        if !imageData.missListItems.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
                 Text("関連するミスリスト")
                     .font(.headline)
                     .tracking(0.3)
                 
+                Spacer()
+                
+                Button(action: {
+                    showingAddMissView = true
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.blue)
+                        .font(.title2)
+                }
+            }
+            
+            if imageData.missListItems.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "list.bullet.clipboard")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray)
+                    
+                    Text("この画像に関連するミスリストはありません")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("ミスリストを追加") {
+                        showingAddMissView = true
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(Color.gray.opacity(0.05))
+                .cornerRadius(12)
+            } else {
                 ForEach(imageData.missListItems, id: \.id) { missItem in
                     MissListItemCard(missItem: missItem)
                 }
@@ -212,5 +255,81 @@ struct MissListItemCard: View {
         .padding(16)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(10)
+    }
+}
+
+struct AddMissFromImageView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    
+    let imageData: ImageData
+    @State private var title = ""
+    @State private var content = ""
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("ミスの内容") {
+                    TextField("タイトル", text: $title)
+                    TextField("詳細説明", text: $content, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+                
+                Section("関連する画像") {
+                    HStack {
+                        if let image = imageData.image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 60, height: 60)
+                                .clipped()
+                                .cornerRadius(8)
+                        } else {
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 60, height: 60)
+                                .cornerRadius(8)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(imageData.tagType.displayName)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            
+                            if let taskName = imageData.taskName {
+                                Text(taskName.name)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .navigationTitle("新しいミス記録")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("キャンセル") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存") {
+                        saveMissItem()
+                    }
+                    .disabled(title.isEmpty || content.isEmpty)
+                }
+            }
+        }
+    }
+    
+    private func saveMissItem() {
+        let missItem = MissListItem(title: title, content: content, imageData: imageData)
+        modelContext.insert(missItem)
+        dismiss()
     }
 }
