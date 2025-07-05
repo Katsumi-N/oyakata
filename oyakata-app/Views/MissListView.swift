@@ -34,7 +34,6 @@ struct MissListView: View {
         return filtered.sorted { $0.createdAt > $1.createdAt }
     }
     
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     var body: some View {
         VStack(spacing: 0) {

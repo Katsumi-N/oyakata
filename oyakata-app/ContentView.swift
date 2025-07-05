@@ -11,13 +11,19 @@ import SwiftData
 struct ContentView: View {
     var body: some View {
         TabView {
-            ImageGridView()
+            NavigationView {
+                ImageGridView()
+            }
+            .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
                     Image(systemName: "photo.on.rectangle")
                     Text("画像管理")
                 }
             
-            MissListView()
+            NavigationView {
+                MissListView()
+            }
+            .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
                     Image(systemName: "list.bullet.clipboard")
                     Text("ミスリスト")

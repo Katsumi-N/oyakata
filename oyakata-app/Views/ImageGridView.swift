@@ -25,6 +25,8 @@ struct ImageGroup: Identifiable {
 
 struct ImageGridView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
     @Query private var images: [ImageData]
     
     @State private var showingImagePicker = false
@@ -35,17 +37,26 @@ struct ImageGridView: View {
     @State private var groupToDelete: ImageGroup?
     @State private var imageToDelete: ImageData?
     
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    
     var columns: [GridItem] {
         let spacing: CGFloat = 12
-        switch horizontalSizeClass {
-        case .regular:
-            // iPad: より多くのカラムを表示
-            return Array(repeating: GridItem(.flexible(), spacing: spacing), count: 4)
+        
+        // サイズクラスに基づいて固定サイズのレイアウトを決定
+        switch (horizontalSizeClass, verticalSizeClass) {
+        case (.compact, .regular):
+            // iPhone縦向き - 2列
+            return Array(repeating: GridItem(.flexible(minimum: 160, maximum: 200), spacing: spacing), count: 2)
+        case (.compact, .compact):
+            // iPhone横向き - 3列
+            return Array(repeating: GridItem(.flexible(minimum: 160, maximum: 200), spacing: spacing), count: 3)
+        case (.regular, .regular):
+            // iPad縦向き - 3列
+            return Array(repeating: GridItem(.flexible(minimum: 200, maximum: 300), spacing: spacing), count: 3)
+        case (.regular, .compact):
+            // iPad横向き - 4列
+            return Array(repeating: GridItem(.flexible(minimum: 240, maximum: 300), spacing: spacing), count: 4)
         default:
-            // iPhone: アダプティブレイアウト
-            return [GridItem(.adaptive(minimum: 120), spacing: spacing)]
+            // デフォルト - 2列
+            return Array(repeating: GridItem(.flexible(minimum: 160, maximum: 200), spacing: spacing), count: 2)
         }
     }
     
@@ -97,16 +108,15 @@ struct ImageGridView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            NavigationView {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
                     // 検索バー
                     SearchBar(text: $searchText)
-                        .padding(.horizontal, horizontalSizeClass == .regular ? 24 : 16)
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                     
                     // フィルターセクション
                     FilterSection(selectedTag: $selectedTag, selectedTask: $selectedTask)
-                        .padding(.horizontal, horizontalSizeClass == .regular ? 24 : 16)
+                        .padding(.horizontal, 16)
                     
                     // 画像グリッド
                     if groupedImages.isEmpty {
@@ -141,25 +151,23 @@ struct ImageGridView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, horizontalSizeClass == .regular ? 24 : 12)
-                            .padding(.vertical, horizontalSizeClass == .regular ? 16 : 8)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .navigationTitle("画像管理")
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: {
-                            showingImagePicker = true
-                        }) {
-                            Image(systemName: "plus")
-                        }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("画像管理")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingImagePicker = true
+                    }) {
+                        Image(systemName: "plus")
                     }
                 }
             }
-            .navigationViewStyle(StackNavigationViewStyle())
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .sheet(isPresented: $showingImagePicker) {
@@ -319,13 +327,13 @@ struct ImageGridItemView: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(minHeight: 140, maxHeight: 160)
+                    .frame(width: 140, height: 140)
                     .clipped()
                     .cornerRadius(8)
             } else {
                 Rectangle()
                     .fill(Color.gray.opacity(0.3))
-                    .frame(height: 140)
+                    .frame(width: 140, height: 140)
                     .cornerRadius(8)
                     .overlay(
                         Image(systemName: "photo")
@@ -388,13 +396,13 @@ struct GroupGridItemView: View {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(minHeight: 140, maxHeight: 160)
+                        .frame(width: 140, height: 140)
                         .clipped()
                         .cornerRadius(8)
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.3))
-                        .frame(height: 140)
+                        .frame(width: 140, height: 140)
                         .cornerRadius(8)
                         .overlay(
                             Image(systemName: "photo")
@@ -403,7 +411,22 @@ struct GroupGridItemView: View {
                         )
                 }
                 
-                // 枚数バッジ（複数画像の場合のみ）
+                // 重なり効果（複数画像の場合のみ）
+                if group.images.count > 1 {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.3))
+                        .frame(width: 140, height: 140)
+                        .cornerRadius(8)
+                        .overlay(
+                            Rectangle()
+                                .stroke(Color.white, lineWidth: 2)
+                                .cornerRadius(8)
+                                .offset(x: -3, y: -3)
+                        )
+                        .offset(x: 3, y: 3)
+                }
+                
+                // 枚数バッジ（最前面に配置）
                 if group.images.count > 1 {
                     VStack {
                         HStack {
@@ -420,19 +443,7 @@ struct GroupGridItemView: View {
                         }
                         Spacer()
                     }
-                    
-                    // 重なり効果
-                    Rectangle()
-                        .fill(Color.white.opacity(0.3))
-                        .frame(minHeight: 140, maxHeight: 160)
-                        .cornerRadius(8)
-                        .overlay(
-                            Rectangle()
-                                .stroke(Color.white, lineWidth: 2)
-                                .cornerRadius(8)
-                                .offset(x: -3, y: -3)
-                        )
-                        .offset(x: 3, y: 3)
+                    .zIndex(1)
                 }
             }
             

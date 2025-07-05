@@ -11,7 +11,6 @@ import SwiftData
 struct ImageDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     let imageData: ImageData
     @State private var showingEditView = false
@@ -20,36 +19,15 @@ struct ImageDetailView: View {
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
-                if horizontalSizeClass == .regular {
-                    // iPad: 2カラムレイアウト
-                    HStack(alignment: .top, spacing: 32) {
-                        // 左側: 画像
-                        VStack {
-                            imageSection(geometry: geometry)
-                        }
-                        .frame(maxWidth: geometry.size.width * 0.6)
-                        
-                        // 右側: メタデータとミスリスト
-                        VStack(alignment: .leading, spacing: 24) {
-                            metadataSection
-                            missListSection
-                            Spacer()
-                        }
-                        .frame(maxWidth: geometry.size.width * 0.35)
-                    }
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 24)
-                } else {
-                    // iPhone: 1カラムレイアウト
-                    VStack(alignment: .leading, spacing: 20) {
-                        imageSection(geometry: geometry)
-                        metadataSection
-                        missListSection
-                        Spacer(minLength: 50)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                // iPhone と同じ 1カラムレイアウトを使用
+                VStack(alignment: .leading, spacing: 20) {
+                    imageSection(geometry: geometry)
+                    metadataSection
+                    missListSection
+                    Spacer(minLength: 50)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
         }
         .navigationTitle("画像詳細")
@@ -96,15 +74,15 @@ struct ImageDetailView: View {
             Image(uiImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: horizontalSizeClass == .regular ? .infinity : geometry.size.width - 32,
-                       maxHeight: horizontalSizeClass == .regular ? geometry.size.height * 0.8 : geometry.size.height * 0.6)
+                .frame(maxWidth: geometry.size.width - 32,
+                       maxHeight: geometry.size.height * 0.6)
                 .cornerRadius(12)
                 .shadow(radius: 4)
         } else {
             Rectangle()
                 .fill(Color.gray.opacity(0.3))
-                .frame(width: horizontalSizeClass == .regular ? .infinity : geometry.size.width - 32,
-                       height: horizontalSizeClass == .regular ? geometry.size.height * 0.5 : geometry.size.height * 0.4)
+                .frame(width: geometry.size.width - 32,
+                       height: geometry.size.height * 0.4)
                 .cornerRadius(12)
                 .overlay(
                     VStack {

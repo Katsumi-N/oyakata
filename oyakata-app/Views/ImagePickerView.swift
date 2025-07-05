@@ -22,7 +22,6 @@ struct ImagePickerView: View {
     @State private var showingTaskNameInput = false
     @State private var showingDocumentPicker = false
     @State private var selectedDocuments: [URL] = []
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     @Query private var taskNames: [TaskName]
     
@@ -37,7 +36,7 @@ struct ImagePickerView: View {
                             .tracking(0.3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: horizontalSizeClass == .regular ? 3 : 2), spacing: 12) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
                             ForEach(TagType.allCases, id: \.self) { tag in
                                 Button(action: {
                                     selectedTag = tag
@@ -133,8 +132,8 @@ struct ImagePickerView: View {
                     
                     Spacer(minLength: 40)
                 }
-                .padding(.horizontal, horizontalSizeClass == .regular ? 32 : 20)
-                .padding(.vertical, horizontalSizeClass == .regular ? 24 : 16)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
             .navigationTitle("画像を追加")
             .navigationBarTitleDisplayMode(.inline)

@@ -10,16 +10,10 @@ import SwiftData
 
 struct GroupDetailView: View {
     let group: ImageGroup
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
-    var columns: [GridItem] {
-        let spacing: CGFloat = 12
-        switch horizontalSizeClass {
-        case .regular:
-            return Array(repeating: GridItem(.flexible(), spacing: spacing), count: 3)
-        default:
-            return Array(repeating: GridItem(.flexible(), spacing: spacing), count: 2)
-        }
+    var imageWidth: CGFloat {
+        // iPhone と同じサイズを使用
+        return 160
     }
     
     var body: some View {
@@ -92,15 +86,17 @@ struct GroupDetailView: View {
                 .cornerRadius(12)
                 .padding(.horizontal)
                 
-                // 画像グリッド
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(group.images, id: \.id) { imageData in
-                        NavigationLink(destination: ImageDetailView(imageData: imageData)) {
-                            GroupImageItemView(imageData: imageData)
+                // 画像横スクロール
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(group.images, id: \.id) { imageData in
+                            NavigationLink(destination: ImageDetailView(imageData: imageData)) {
+                                GroupImageItemView(imageData: imageData, imageWidth: imageWidth)
+                            }
                         }
                     }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
                 
                 Spacer(minLength: 20)
             }
@@ -120,6 +116,7 @@ struct GroupDetailView: View {
 
 struct GroupImageItemView: View {
     let imageData: ImageData
+    let imageWidth: CGFloat
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -128,13 +125,13 @@ struct GroupImageItemView: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(minHeight: 120, maxHeight: 140)
+                    .frame(width: imageWidth, height: imageWidth * 0.75)
                     .clipped()
                     .cornerRadius(8)
             } else {
                 Rectangle()
                     .fill(Color.gray.opacity(0.3))
-                    .frame(height: 120)
+                    .frame(width: imageWidth, height: imageWidth * 0.75)
                     .cornerRadius(8)
                     .overlay(
                         Image(systemName: "photo")
@@ -162,6 +159,7 @@ struct GroupImageItemView: View {
             }
             .padding(.horizontal, 4)
         }
+        .frame(width: imageWidth)
         .padding(8)
         .background(Color(.systemBackground))
         .cornerRadius(10)
