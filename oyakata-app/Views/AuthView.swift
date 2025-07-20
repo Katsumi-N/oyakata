@@ -42,7 +42,7 @@ struct AuthView: View {
                         viewModel.signIn()
                     }
                 }) {
-                    if viewModel.authService_.isLoading {
+                    if viewModel.isLoading {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     } else {
@@ -55,7 +55,7 @@ struct AuthView: View {
                 .foregroundColor(.white)
                 .cornerRadius(10)
                 .padding(.horizontal, 20)
-                .disabled(!viewModel.isFormValid || viewModel.authService_.isLoading)
+                .disabled(!viewModel.isFormValid || viewModel.isLoading)
                 
                 if !viewModel.isSignUpMode {
                     Button("パスワードを忘れた場合") {
@@ -74,6 +74,9 @@ struct AuthView: View {
                 }
             }
             .padding()
+        }
+        .onAppear {
+            viewModel.setAuthService(authService)
         }
         .alert("通知", isPresented: $viewModel.showingAlert) {
             Button("OK") { }

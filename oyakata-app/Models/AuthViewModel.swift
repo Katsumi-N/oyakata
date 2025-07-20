@@ -15,8 +15,9 @@ class AuthViewModel: ObservableObject {
     @Published var isSignUpMode = false
     @Published var showingAlert = false
     @Published var alertMessage = ""
+    @Published var isLoading = false
     
-    private let authService = AuthService()
+    private var authService: AuthService?
     
     var isFormValid: Bool {
         if isSignUpMode {
@@ -26,8 +27,8 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    var authService_: AuthService {
-        return authService
+    func setAuthService(_ service: AuthService) {
+        self.authService = service
     }
     
     func signUp() {
@@ -38,9 +39,13 @@ class AuthViewModel: ObservableObject {
         }
         
         Task {
-            await authService.signUp(email: email, password: password)
             await MainActor.run {
-                if let error = authService.errorMessage {
+                isLoading = true
+            }
+            await authService?.signUp(email: email, password: password)
+            await MainActor.run {
+                isLoading = false
+                if let error = authService?.errorMessage {
                     alertMessage = error
                     showingAlert = true
                 } else {
@@ -58,9 +63,13 @@ class AuthViewModel: ObservableObject {
         }
         
         Task {
-            await authService.signIn(email: email, password: password)
             await MainActor.run {
-                if let error = authService.errorMessage {
+                isLoading = true
+            }
+            await authService?.signIn(email: email, password: password)
+            await MainActor.run {
+                isLoading = false
+                if let error = authService?.errorMessage {
                     alertMessage = error
                     showingAlert = true
                 } else {
@@ -72,7 +81,7 @@ class AuthViewModel: ObservableObject {
     
     func signOut() {
         Task {
-            await authService.signOut()
+            await authService?.signOut()
         }
     }
     
@@ -84,9 +93,13 @@ class AuthViewModel: ObservableObject {
         }
         
         Task {
-            await authService.resetPassword(email: email)
             await MainActor.run {
-                if let error = authService.errorMessage {
+                isLoading = true
+            }
+            await authService?.resetPassword(email: email)
+            await MainActor.run {
+                isLoading = false
+                if let error = authService?.errorMessage {
                     alertMessage = error
                 } else {
                     alertMessage = "パスワードリセットメールを送信しました"
