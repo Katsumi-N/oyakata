@@ -16,6 +16,7 @@ struct ImageDetailView: View {
     @State private var showingEditView = false
     @State private var showingDeleteAlert = false
     @State private var showingAddMissView = false
+    @State private var showingTimeRecordView = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -24,6 +25,7 @@ struct ImageDetailView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     imageSection(geometry: geometry)
                     metadataSection
+                    timeRecordSection
                     missListSection
                     Spacer(minLength: 50)
                 }
@@ -40,6 +42,12 @@ struct ImageDetailView: View {
                         showingEditView = true
                     }) {
                         Label("編集", systemImage: "pencil")
+                    }
+                    
+                    Button(action: {
+                        showingTimeRecordView = true
+                    }) {
+                        Label("時間記録", systemImage: "clock")
                     }
                     
                     Button(action: {
@@ -64,6 +72,9 @@ struct ImageDetailView: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingTimeRecordView) {
+            TimeRecordEditView(imageData: imageData)
         }
         .sheet(isPresented: $showingAddMissView) {
             AddMissFromImageView(imageData: imageData)
@@ -114,7 +125,9 @@ struct ImageDetailView: View {
                 .tracking(0.3)
             
             VStack(spacing: 12) {
-                MetadataRow(title: "タグ", value: imageData.tagType.displayName, icon: imageData.tagType.systemImage)
+                if !imageData.tags.isEmpty {
+                    MetadataRow(title: "タグ", value: imageData.tags.map { $0.displayName }.joined(separator: ", "), icon: "tag")
+                }
                 
                 if let taskName = imageData.taskName {
                     MetadataRow(title: "課題名", value: taskName.name, icon: "doc.text")
@@ -129,6 +142,141 @@ struct ImageDetailView: View {
                 if imageData.updatedAt != imageData.createdAt {
                     MetadataRow(title: "更新日", value: DateFormatter.localizedString(from: imageData.updatedAt, dateStyle: .medium, timeStyle: .short), icon: "clock")
                 }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var timeRecordSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("時間記録")
+                    .font(.headline)
+                    .tracking(0.3)
+                
+                Spacer()
+                
+                Button(action: {
+                    showingTimeRecordView = true
+                }) {
+                    Image(systemName: imageData.hasTimeRecord ? "pencil.circle.fill" : "plus.circle.fill")
+                        .foregroundColor(.blue)
+                        .font(.title2)
+                }
+            }
+            
+            if let timeRecord = imageData.timeRecord, timeRecord.hasTimeRecorded {
+                VStack(spacing: 16) {
+                    // 時間記録項目
+                    VStack(spacing: 8) {
+                        if timeRecord.sketchTime > 0 {
+                            ModernTimeDisplayRow(
+                                title: "エスキス", 
+                                time: timeRecord.sketchTimeFormatted, 
+                                icon: "pencil",
+                                color: .orange
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                        }
+                        
+                        if timeRecord.descriptionTime > 0 {
+                            ModernTimeDisplayRow(
+                                title: "記述", 
+                                time: timeRecord.descriptionTimeFormatted, 
+                                icon: "doc.text",
+                                color: .green
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                        }
+                        
+                        if timeRecord.drawingTime > 0 {
+                            ModernTimeDisplayRow(
+                                title: "製図", 
+                                time: timeRecord.drawingTimeFormatted, 
+                                icon: "ruler",
+                                color: .blue
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                        }
+                    }
+                    
+                    // 合計時間セクション
+                    HStack(spacing: 12) {
+                        Image(systemName: "clock.fill")
+                            .font(.title3)
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [.blue, .purple]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .clipShape(Circle())
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("合計時間")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            Text(timeRecord.totalTimeFormatted)
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(.primary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray)
+                    
+                    Text("時間記録がありません")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("時間を記録する") {
+                        showingTimeRecordView = true
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(Color.gray.opacity(0.05))
+                .cornerRadius(12)
             }
         }
     }
@@ -225,6 +373,70 @@ struct MetadataRow: View {
     }
 }
 
+struct TimeRecordRow: View {
+    let title: String
+    let time: String
+    let icon: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.blue)
+                .frame(width: 24)
+                .font(.subheadline)
+            
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .tracking(0.2)
+            
+            Spacer()
+            
+            Text(time)
+                .font(.subheadline)
+                .foregroundColor(.primary)
+                .tracking(0.2)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+struct ModernTimeDisplayRow: View {
+    let title: String
+    let time: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundColor(color)
+                .frame(width: 28, height: 28)
+                .background(color.opacity(0.15))
+                .clipShape(Circle())
+            
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+            
+            Spacer()
+            
+            Text(time)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(color)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(color.opacity(0.1))
+                .clipShape(Capsule())
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 struct MissListItemCard: View {
     let missItem: MissListItem
     
@@ -292,7 +504,7 @@ struct AddMissFromImageView: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(imageData.tagType.displayName)
+                            Text(imageData.tags.map { $0.displayName }.joined(separator: ", "))
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                             

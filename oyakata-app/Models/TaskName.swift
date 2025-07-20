@@ -9,7 +9,8 @@ import Foundation
 import SwiftData
 
 @Model
-final class TaskName {
+final class TaskName: Hashable, Equatable {
+    var id: UUID
     var name: String
     var createdAt: Date
     
@@ -17,6 +18,7 @@ final class TaskName {
     var images: [ImageData] = []
     
     init(name: String) {
+        self.id = UUID()
         self.name = name
         self.createdAt = Date()
     }
@@ -24,5 +26,14 @@ final class TaskName {
     static var yearSuggestions: [String] {
         let currentYear = Calendar.current.component(.year, from: Date())
         return (currentYear-10...currentYear+2).map { "令和\($0 - 2018)年" }
+    }
+    
+    // MARK: - Hashable & Equatable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    static func == (lhs: TaskName, rhs: TaskName) -> Bool {
+        return lhs.id == rhs.id
     }
 }

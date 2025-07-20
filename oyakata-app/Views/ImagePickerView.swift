@@ -16,7 +16,7 @@ struct ImagePickerView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var selectedItems: [PhotosPickerItem] = []
-    @State private var selectedTag: TagType = .questionPaper
+    @State private var selectedTags: Set<TagType> = []
     @State private var selectedTaskName: TaskName?
     @State private var newTaskName: String = ""
     @State private var showingTaskNameInput = false
@@ -31,7 +31,7 @@ struct ImagePickerView: View {
                 VStack(spacing: 24) {
                     // タグ選択セクション
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("タグを選択")
+                        Text("タグを選択（複数選択可）")
                             .font(.headline)
                             .tracking(0.3)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -39,7 +39,11 @@ struct ImagePickerView: View {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
                             ForEach(TagType.allCases, id: \.self) { tag in
                                 Button(action: {
-                                    selectedTag = tag
+                                    if selectedTags.contains(tag) {
+                                        selectedTags.remove(tag)
+                                    } else {
+                                        selectedTags.insert(tag)
+                                    }
                                 }) {
                                     HStack(spacing: 8) {
                                         Image(systemName: tag.systemImage)
@@ -52,8 +56,8 @@ struct ImagePickerView: View {
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 10)
                                     .frame(maxWidth: .infinity, minHeight: 44)
-                                    .background(selectedTag == tag ? Color.blue : Color.gray.opacity(0.2))
-                                    .foregroundColor(selectedTag == tag ? .white : .primary)
+                                    .background(selectedTags.contains(tag) ? Color.blue : Color.gray.opacity(0.2))
+                                    .foregroundColor(selectedTags.contains(tag) ? .white : .primary)
                                     .cornerRadius(10)
                                 }
                             }
@@ -70,7 +74,7 @@ struct ImagePickerView: View {
                         VStack(spacing: 12) {
                             Picker("課題名", selection: $selectedTaskName) {
                                 Text("選択なし").tag(TaskName?.none)
-                                ForEach(taskNames, id: \.self) { taskName in
+                                ForEach(taskNames, id: \.id) { taskName in
                                     Text(taskName.name).tag(taskName as TaskName?)
                                 }
                             }
@@ -180,9 +184,16 @@ struct ImagePickerView: View {
     }
     
     private func createNewTaskName() {
-        let taskName = TaskName(name: newTaskName)
-        modelContext.insert(taskName)
-        selectedTaskName = taskName
+        // 既存の課題名をチェック
+        if let existingTaskName = taskNames.first(where: { $0.name == newTaskName }) {
+            // 既存の課題名が見つかった場合はそれを使用
+            selectedTaskName = existingTaskName
+        } else {
+            // 新しい課題名を作成
+            let taskName = TaskName(name: newTaskName)
+            modelContext.insert(taskName)
+            selectedTaskName = taskName
+        }
         newTaskName = ""
     }
     
@@ -246,7 +257,7 @@ struct ImagePickerView: View {
                 let imageDataModel = ImageData(
                     fileName: fileName,
                     filePath: fileName,
-                    tagType: selectedTag,
+                    tags: Array(selectedTags),
                     taskName: selectedTaskName,
                     groupId: groupId,
                     groupCreatedAt: groupCreatedAt

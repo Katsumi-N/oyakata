@@ -16,12 +16,30 @@ struct oyakata_appApp: App {
             TaskName.self,
             MissListItem.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // データベースが破損している場合、マイグレーションを実行
+            print("ModelContainer作成エラー: \(error)")
+            print("データベースマイグレーションを実行しています...")
+            
+            // マイグレーションマネージャーを使用してクリーンアップ
+            MigrationManager.handleMigration()
+            
+            // 新しいコンテナを作成
+            do {
+                return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            } catch {
+                fatalError("マイグレーション後もModelContainer作成に失敗: \(error)")
+            }
         }
     }()
 

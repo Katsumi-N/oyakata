@@ -14,7 +14,7 @@ final class ImageData {
     var id: UUID
     var fileName: String
     var filePath: String
-    var tagType: TagType
+    var tags: [TagType]
     var createdAt: Date
     var updatedAt: Date
     var hasAnnotations: Bool
@@ -27,11 +27,14 @@ final class ImageData {
     @Relationship(deleteRule: .cascade, inverse: \MissListItem.imageData)
     var missListItems: [MissListItem] = []
     
-    init(fileName: String, filePath: String, tagType: TagType, taskName: TaskName? = nil, groupId: UUID? = nil, groupCreatedAt: Date? = nil) {
+    @Relationship(deleteRule: .cascade)
+    var timeRecord: TimeRecord?
+    
+    init(fileName: String, filePath: String, tags: [TagType] = [], taskName: TaskName? = nil, groupId: UUID? = nil, groupCreatedAt: Date? = nil) {
         self.id = UUID()
         self.fileName = fileName
         self.filePath = filePath
-        self.tagType = tagType
+        self.tags = tags
         self.taskName = taskName
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -100,5 +103,26 @@ final class ImageData {
     /// グループ化された画像かどうかを判定
     var isGrouped: Bool {
         return groupId != nil
+    }
+    
+    /// 無効なタグを除去して有効なタグのみを返す
+    var validTags: [TagType] {
+        return tags.filter { tag in
+            TagType.allCases.contains(tag)
+        }
+    }
+    
+    /// 無効なタグがある場合にクリーンアップする
+    func cleanupInvalidTags() {
+        let validTagsArray = validTags
+        if validTagsArray.count != tags.count {
+            tags = validTagsArray
+            updateAnnotationStatus(hasAnnotations)
+        }
+    }
+    
+    /// 時間記録があるかどうか
+    var hasTimeRecord: Bool {
+        return timeRecord?.hasTimeRecorded ?? false
     }
 }

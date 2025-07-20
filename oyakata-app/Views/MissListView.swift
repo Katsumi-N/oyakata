@@ -39,16 +39,29 @@ struct MissListView: View {
         VStack(spacing: 0) {
             // 検索・フィルターセクション
             VStack(spacing: 12) {
-                SearchBar(text: $searchText)
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 16))
+                    
+                    TextField("ミスを検索...", text: $searchText)
+                        .font(.system(size: 16))
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                }
+                .padding(.horizontal, 20)
                 
                 HStack {
                     Toggle("解決済みを表示", isOn: $showResolved)
+                        .font(.system(size: 16))
                     Spacer()
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
             }
-            .padding(.vertical, 8)
-            .background(Color(.systemGroupedBackground))
+            .padding(.vertical, 12)
+            .background(.regularMaterial)
             
             // ミスリスト表示
             if filteredItems.isEmpty {
@@ -69,12 +82,14 @@ struct MissListView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("ミスリスト")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     showingAddView = true
                 }) {
                     Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .medium))
                 }
             }
         }
@@ -133,15 +148,15 @@ struct MissListRowView: View {
                         Image(systemName: "photo")
                             .foregroundColor(.blue)
                             .font(.caption)
-                        Text(imageData.tagType.displayName)
+                        Text(imageData.tags.map { $0.displayName }.joined(separator: ", "))
                             .font(.caption)
                             .foregroundColor(.blue)
                             .tracking(0.2)
                     }
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(8)
+                    .background(.blue.opacity(0.15))
+                    .clipShape(Capsule())
                 }
                 
                 Spacer()
@@ -200,7 +215,7 @@ struct AddMissListItemView: View {
                         Text("選択なし").tag(ImageData?.none)
                         ForEach(images, id: \.id) { image in
                             HStack {
-                                Text(image.tagType.displayName)
+                                Text(image.tags.map { $0.displayName }.joined(separator: ", "))
                                 if let taskName = image.taskName {
                                     Text("- \(taskName.name)")
                                         .foregroundColor(.secondary)
@@ -263,11 +278,11 @@ struct MissListDetailView: View {
                     }) {
                         Text(missItem.isResolved ? "未解決にする" : "解決済みにする")
                             .font(.caption)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(missItem.isResolved ? Color.orange : Color.green)
-                            .foregroundColor(.white)
-                            .cornerRadius(16)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(missItem.isResolved ? .orange : .green)
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
                     }
                 }
                 .padding()
@@ -354,7 +369,7 @@ struct EditMissListItemView: View {
                         Text("選択なし").tag(ImageData?.none)
                         ForEach(images, id: \.id) { image in
                             HStack {
-                                Text(image.tagType.displayName)
+                                Text(image.tags.map { $0.displayName }.joined(separator: ", "))
                                 if let taskName = image.taskName {
                                     Text("- \(taskName.name)")
                                         .foregroundColor(.secondary)

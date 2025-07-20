@@ -64,7 +64,7 @@ struct ImageGridView: View {
         var filtered = images
         
         if let tag = selectedTag {
-            filtered = filtered.filter { $0.tagType == tag }
+            filtered = filtered.filter { $0.tags.contains(tag) }
         }
         
         if let task = selectedTask {
@@ -74,7 +74,7 @@ struct ImageGridView: View {
         if !searchText.isEmpty {
             filtered = filtered.filter { imageData in
                 imageData.taskName?.name.localizedCaseInsensitiveContains(searchText) ?? false ||
-                imageData.tagType.displayName.localizedCaseInsensitiveContains(searchText)
+                imageData.tags.contains { $0.displayName.localizedCaseInsensitiveContains(searchText) }
             }
         }
         
@@ -158,13 +158,15 @@ struct ImageGridView: View {
                     }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("画像管理")
+            .navigationTitle("図面一覧")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         showingImagePicker = true
                     }) {
                         Image(systemName: "plus")
+                            .font(.system(size: 18, weight: .medium))
                     }
                 }
             }
@@ -246,13 +248,19 @@ struct SearchBar: View {
     @Binding var text: String
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
+                .font(.system(size: 16))
             
-            TextField("検索...", text: $text)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+            TextField("画像を検索...", text: $text)
+                .font(.system(size: 16))
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
         }
+        .padding(.horizontal, 4)
     }
 }
 
@@ -287,7 +295,7 @@ struct FilterSection: View {
                             selectedTask = nil
                         }
                         
-                        ForEach(taskNames, id: \.self) { task in
+                        ForEach(taskNames, id: \.id) { task in
                             FilterChip(title: task.name, isSelected: selectedTask == task) {
                                 selectedTask = selectedTask == task ? nil : task
                             }
@@ -307,13 +315,14 @@ struct FilterChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.caption)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.blue : Color.gray.opacity(0.2))
-                .foregroundColor(isSelected ? .white : .primary)
-                .cornerRadius(16)
+                .font(.system(size: 14, weight: .medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isSelected ? Color.accentColor : Color(.systemGray6))
+                .foregroundStyle(isSelected ? .white : .primary)
+                .clipShape(Capsule())
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -344,15 +353,17 @@ struct ImageGridItemView: View {
             
             // メタデータ
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: imageData.tagType.systemImage)
-                        .foregroundColor(.blue)
-                        .font(.caption)
-                    Text(imageData.tagType.displayName)
-                        .font(.caption)
-                        .lineLimit(1)
-                        .foregroundColor(.primary)
-                        .tracking(0.3)
+                if !imageData.tags.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "tag")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                        Text(imageData.tags.map { $0.displayName }.joined(separator: ", "))
+                            .font(.caption)
+                            .lineLimit(1)
+                            .foregroundColor(.primary)
+                            .tracking(0.3)
+                    }
                 }
                 
                 if let taskName = imageData.taskName {
@@ -379,9 +390,8 @@ struct ImageGridItemView: View {
             .padding(.horizontal, 6)
         }
         .padding(8)
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 3, x: 0, y: 2)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -449,15 +459,17 @@ struct GroupGridItemView: View {
             
             // メタデータ（「グループ」表示なし）
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: group.representativeImage.tagType.systemImage)
-                        .foregroundColor(.blue)
-                        .font(.caption)
-                    Text(group.representativeImage.tagType.displayName)
-                        .font(.caption)
-                        .lineLimit(1)
-                        .foregroundColor(.primary)
-                        .tracking(0.3)
+                if !group.representativeImage.tags.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "tag")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                        Text(group.representativeImage.tags.map { $0.displayName }.joined(separator: ", "))
+                            .font(.caption)
+                            .lineLimit(1)
+                            .foregroundColor(.primary)
+                            .tracking(0.3)
+                    }
                 }
                 
                 if let taskName = group.representativeImage.taskName {
@@ -484,9 +496,8 @@ struct GroupGridItemView: View {
             .padding(.horizontal, 6)
         }
         .padding(8)
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 3, x: 0, y: 2)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
     }
 }
 

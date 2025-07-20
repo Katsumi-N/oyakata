@@ -42,17 +42,19 @@ struct GroupDetailView: View {
                     
                     // タグと課題名情報
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
-                            Image(systemName: group.representativeImage.tagType.systemImage)
-                                .foregroundColor(.blue)
-                                .font(.caption)
-                            Text(group.representativeImage.tagType.displayName)
-                                .font(.caption)
-                                .foregroundColor(.primary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(8)
+                        if !group.representativeImage.tags.isEmpty {
+                            HStack(spacing: 8) {
+                                Image(systemName: "tag")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                                Text(group.representativeImage.tags.map { $0.displayName }.joined(separator: ", "))
+                                    .font(.caption)
+                                    .foregroundColor(.primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(8)
+                            }
                         }
                         
                         if let taskName = group.representativeImage.taskName {
