@@ -10,6 +10,7 @@ import SwiftData
 
 @main
 struct oyakata_appApp: App {
+    @StateObject private var authService = AuthService()
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ImageData.self,
@@ -45,7 +46,13 @@ struct oyakata_appApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if authService.isAuthenticated {
+                ContentView()
+                    .environmentObject(authService)
+            } else {
+                AuthView()
+                    .environmentObject(authService)
+            }
         }
         .modelContainer(sharedModelContainer)
     }
