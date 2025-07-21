@@ -14,10 +14,6 @@ struct ImageGroup: Identifiable {
     let groupId: UUID?
     let groupCreatedAt: Date
     
-    var isGroup: Bool {
-        return images.count > 1
-    }
-    
     var representativeImage: ImageData {
         return images.first!
     }
@@ -126,27 +122,14 @@ struct ImageGridView: View {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 12) {
                                 ForEach(groupedImages) { group in
-                                    if group.isGroup {
-                                        NavigationLink(destination: GroupDetailView(group: group)) {
-                                            GroupGridItemView(group: group)
-                                        }
-                                        .contextMenu {
-                                            Button(role: .destructive) {
-                                                deleteGroup(group)
-                                            } label: {
-                                                Label("グループを削除", systemImage: "trash")
-                                            }
-                                        }
-                                    } else {
-                                        NavigationLink(destination: ImageDetailView(imageData: group.representativeImage)) {
-                                            ImageGridItemView(imageData: group.representativeImage)
-                                        }
-                                        .contextMenu {
-                                            Button(role: .destructive) {
-                                                deleteImage(group.representativeImage)
-                                            } label: {
-                                                Label("画像を削除", systemImage: "trash")
-                                            }
+                                    NavigationLink(destination: GroupDetailView(group: group)) {
+                                        GroupGridItemView(group: group)
+                                    }
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            deleteGroup(group)
+                                        } label: {
+                                            Label("図面を削除", systemImage: "trash")
                                         }
                                     }
                                 }
