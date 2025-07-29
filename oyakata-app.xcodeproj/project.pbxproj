@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B4B2B2FF2E2D3806005CD247 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = B4B2B2FE2E2D3806005CD247 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,7 +55,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B4B2B2FF2E2D3806005CD247 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -125,7 +123,6 @@
 			);
 			name = "oyakata-app";
 			packageProductDependencies = (
-				B4B2B2FE2E2D3806005CD247 /* Supabase */,
 			);
 			productName = "oyakata-app";
 			productReference = B4E952962DFBD5B100475176 /* oyakata-app.app */;
@@ -210,7 +207,6 @@
 			mainGroup = B4E9528D2DFBD5B100475176;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				B4B2B2FD2E2D37FB005CD247 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B4E952972DFBD5B100475176 /* Products */;
@@ -570,24 +566,7 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		B4B2B2FD2E2D37FB005CD247 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/supabase/supabase-swift";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.5.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
 
-/* Begin XCSwiftPackageProductDependency section */
-		B4B2B2FE2E2D3806005CD247 /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B4B2B2FD2E2D37FB005CD247 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Supabase;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B4E9528E2DFBD5B100475176 /* Project object */;
 }
