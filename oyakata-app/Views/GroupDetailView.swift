@@ -26,16 +26,17 @@ struct GroupDetailView: View {
                             .foregroundColor(.blue)
                             .font(.title2)
                         
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("画像一覧")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            Text("\(group.images.count)枚")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                        if let taskName = group.representativeImage.taskName {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(taskName.name)
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                
+                                Text("\(group.images.count)枚")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                        
                         Spacer()
                     }
                     .padding(.horizontal)
@@ -53,21 +54,6 @@ struct GroupDetailView: View {
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
                                     .background(Color.blue.opacity(0.1))
-                                    .cornerRadius(8)
-                            }
-                        }
-                        
-                        if let taskName = group.representativeImage.taskName {
-                            HStack(spacing: 8) {
-                                Image(systemName: "tag")
-                                    .foregroundColor(.green)
-                                    .font(.caption)
-                                Text(taskName.name)
-                                    .font(.caption)
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.green.opacity(0.1))
                                     .cornerRadius(8)
                             }
                         }

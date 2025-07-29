@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 このプロジェクトは製図試験の勉強用プリント管理アプリです。SwiftUIとSwiftDataを使用したiOSアプリケーションで、以下の機能を提供します：
 
 - 画像のアップロード・編集（Apple Pencil対応）
-- タグと課題名による画像管理
+- タグとタイトルによる画像管理
 - 6つの定義済みタグ（問題用紙、赤入れした問題用紙、エスキスの例、エスキス、製図、解答例）
 - ミスリスト機能（製図後の振り返り用）
 - 検索機能
@@ -46,7 +46,7 @@ xcodebuild test -project oyakata-app.xcodeproj -scheme oyakata-app -destination 
 
 - **Image**: 画像データと関連メタデータ
 - **Tag**: 定義済み6つのタグ（列挙型）
-- **Task**: 課題名（ユーザー定義可能）
+- **Title**: タイトル（ユーザー定義、必須）
 - **MissList**: ミスリスト項目
 
 ## プロジェクト構造

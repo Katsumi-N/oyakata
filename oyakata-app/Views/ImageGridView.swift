@@ -269,23 +269,6 @@ struct FilterSection: View {
                 }
                 .padding(.horizontal)
             }
-            
-            // 課題名フィルター
-            if !taskNames.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        FilterChip(title: "すべての課題", isSelected: selectedTask == nil) {
-                            selectedTask = nil
-                        }
-                        
-                        ForEach(taskNames, id: \.id) { task in
-                            FilterChip(title: task.name, isSelected: selectedTask == task) {
-                                selectedTask = selectedTask == task ? nil : task
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }

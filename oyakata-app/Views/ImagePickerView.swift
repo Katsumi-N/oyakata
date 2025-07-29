@@ -17,9 +17,7 @@ struct ImagePickerView: View {
     
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var selectedTags: Set<TagType> = []
-    @State private var selectedTaskName: TaskName?
-    @State private var newTaskName: String = ""
-    @State private var showingTaskNameInput = false
+    @State private var taskNameInput: String = ""
     @State private var showingDocumentPicker = false
     @State private var selectedDocuments: [URL] = []
     
@@ -64,31 +62,16 @@ struct ImagePickerView: View {
                         }
                     }
                 
-                    // 課題名選択セクション
+                    // 課題名入力セクション
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("課題名を選択（任意）")
+                        Text("課題名を入力（必須）")
                             .font(.headline)
                             .tracking(0.3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         
-                        VStack(spacing: 12) {
-                            Picker("課題名", selection: $selectedTaskName) {
-                                Text("選択なし").tag(TaskName?.none)
-                                ForEach(taskNames, id: \.id) { taskName in
-                                    Text(taskName.name).tag(taskName as TaskName?)
-                                }
-                            }
-                            .pickerStyle(MenuPickerStyle())
+                        TextField("課題名を入力してください", text: $taskNameInput)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(10)
-                            
-                            Button("新規課題を作成") {
-                                showingTaskNameInput = true
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .buttonStyle(.bordered)
-                        }
                     }
                     
                     // 画像選択セクション
@@ -152,17 +135,8 @@ struct ImagePickerView: View {
                     Button("保存") {
                         saveImages()
                     }
-                    .disabled(selectedItems.isEmpty && selectedDocuments.isEmpty)
+                    .disabled(selectedItems.isEmpty && selectedDocuments.isEmpty || taskNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-            }
-        }
-        .alert("新しい課題名", isPresented: $showingTaskNameInput) {
-            TextField("課題名を入力", text: $newTaskName)
-            Button("キャンセル", role: .cancel) {
-                newTaskName = ""
-            }
-            Button("作成") {
-                createNewTaskName()
             }
         }
         .fileImporter(
@@ -183,18 +157,19 @@ struct ImagePickerView: View {
         }
     }
     
-    private func createNewTaskName() {
+    private func getOrCreateTaskName() -> TaskName {
+        let trimmedName = taskNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        
         // 既存の課題名をチェック
-        if let existingTaskName = taskNames.first(where: { $0.name == newTaskName }) {
+        if let existingTaskName = taskNames.first(where: { $0.name == trimmedName }) {
             // 既存の課題名が見つかった場合はそれを使用
-            selectedTaskName = existingTaskName
+            return existingTaskName
         } else {
             // 新しい課題名を作成
-            let taskName = TaskName(name: newTaskName)
+            let taskName = TaskName(name: trimmedName)
             modelContext.insert(taskName)
-            selectedTaskName = taskName
+            return taskName
         }
-        newTaskName = ""
     }
     
     private func saveImages() {
@@ -254,11 +229,12 @@ struct ImagePickerView: View {
             try imageData.write(to: fileURL)
             
             await MainActor.run {
+                let taskName = getOrCreateTaskName()
                 let imageDataModel = ImageData(
                     fileName: fileName,
                     filePath: fileName,
                     tags: Array(selectedTags),
-                    taskName: selectedTaskName,
+                    taskName: taskName,
                     groupId: groupId,
                     groupCreatedAt: groupCreatedAt
                 )
