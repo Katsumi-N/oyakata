@@ -323,7 +323,10 @@ struct ImageDetailView: View {
                 .cornerRadius(12)
             } else {
                 ForEach(imageData.missListItems, id: \.id) { missItem in
-                    MissListItemCard(missItem: missItem)
+                    NavigationLink(destination: EditMissListItemView(missItem: missItem)) {
+                        MissListItemCard(missItem: missItem)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }

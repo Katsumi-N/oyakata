@@ -6,9 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		B4E952A62DFBD5B300475176 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -565,8 +562,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-
 	};
 	rootObject = B4E9528E2DFBD5B100475176 /* Project object */;
 }

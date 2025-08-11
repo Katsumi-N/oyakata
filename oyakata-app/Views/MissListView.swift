@@ -12,16 +12,30 @@ struct MissListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var missListItems: [MissListItem]
     @Query private var images: [ImageData]
+    @Query private var taskNames: [TaskName]
     
     @State private var showingAddView = false
     @State private var searchText = ""
     @State private var showResolved = true
+    @State private var selectedTaskName: TaskName?
+    
+    // 利用可能な課題名を取得（ミスリストに関連する画像がある課題のみ）
+    var availableTaskNames: [TaskName] {
+        let taskNamesWithMiss = Set(missListItems.compactMap { $0.imageData?.taskName })
+        return taskNames.filter { taskNamesWithMiss.contains($0) }.sorted { $0.name < $1.name }
+    }
     
     var filteredItems: [MissListItem] {
         var filtered = missListItems
         
         if !showResolved {
             filtered = filtered.filter { !$0.isResolved }
+        }
+        
+        if let selectedTask = selectedTaskName {
+            filtered = filtered.filter { item in
+                item.imageData?.taskName == selectedTask
+            }
         }
         
         if !searchText.isEmpty {
@@ -53,6 +67,27 @@ struct MissListView: View {
                 }
                 .padding(.horizontal, 20)
                 
+                // 課題名フィルター
+                if !availableTaskNames.isEmpty {
+                    HStack {
+                        Image(systemName: "doc.text")
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 16))
+                        
+                        Picker("課題名でフィルタ", selection: $selectedTaskName) {
+                            Text("全ての課題").tag(TaskName?.none)
+                            ForEach(availableTaskNames, id: \.id) { taskName in
+                                Text(taskName.name).tag(taskName as TaskName?)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .font(.system(size: 16))
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                }
+                
                 HStack {
                     Toggle("解決済みを表示", isOn: $showResolved)
                         .font(.system(size: 16))
@@ -65,12 +100,12 @@ struct MissListView: View {
             
             // ミスリスト表示
             if filteredItems.isEmpty {
-                MissListEmptyView()
+                MissListEmptyView(hasFilters: selectedTaskName != nil || !searchText.isEmpty)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
                     ForEach(filteredItems, id: \.id) { item in
-                        NavigationLink(destination: MissListDetailView(missItem: item)) {
+                        NavigationLink(destination: EditMissListItemView(missItem: item)) {
                             MissListRowView(missItem: item)
                         }
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -173,20 +208,33 @@ struct MissListRowView: View {
 }
 
 struct MissListEmptyView: View {
+    let hasFilters: Bool
+    
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "list.bullet.clipboard")
                 .font(.system(size: 60))
                 .foregroundColor(.gray)
             
-            Text("ミスリストがありません")
-                .font(.title2)
-                .foregroundColor(.gray)
-            
-            Text("右上の + ボタンからミスを記録してください")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            if hasFilters {
+                Text("条件に一致するミスリストがありません")
+                    .font(.title2)
+                    .foregroundColor(.gray)
+                
+                Text("フィルター条件を変更するか、検索キーワードをクリアしてください")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            } else {
+                Text("ミスリストがありません")
+                    .font(.title2)
+                    .foregroundColor(.gray)
+                
+                Text("右上の + ボタンからミスを記録してください")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding()
     }
@@ -195,11 +243,15 @@ struct MissListEmptyView: View {
 struct AddMissListItemView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Query private var images: [ImageData]
+    @Query(sort: \ImageData.createdAt, order: .reverse) private var images: [ImageData]
     
     @State private var title = ""
     @State private var content = ""
-    @State private var selectedImage: ImageData?
+    
+    // 最新の画像を自動選択
+    private var autoSelectedImage: ImageData? {
+        return images.first
+    }
     
     var body: some View {
         NavigationView {
@@ -210,21 +262,44 @@ struct AddMissListItemView: View {
                         .lineLimit(3...6)
                 }
                 
-                Section("関連する画像（任意）") {
-                    Picker("画像を選択", selection: $selectedImage) {
-                        Text("選択なし").tag(ImageData?.none)
-                        ForEach(images, id: \.id) { image in
-                            HStack {
-                                Text(image.tags.map { $0.displayName }.joined(separator: ", "))
-                                if let taskName = image.taskName {
-                                    Text("- \(taskName.name)")
+                // 自動選択された画像がある場合は表示（選択不可）
+                if let imageData = autoSelectedImage {
+                    Section("関連する画像（最新の画像を自動選択）") {
+                        HStack {
+                            if let image = imageData.image {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 60, height: 60)
+                                    .clipped()
+                                    .cornerRadius(8)
+                            } else {
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 60, height: 60)
+                                    .cornerRadius(8)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(imageData.tags.map { $0.displayName }.joined(separator: ", "))
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                if let taskName = imageData.taskName {
+                                    Text(taskName.name)
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
+                                
+                                Text("作成日: \(DateFormatter.localizedString(from: imageData.createdAt, dateStyle: .short, timeStyle: .short))")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
-                            .tag(image as ImageData?)
+                            
+                            Spacer()
                         }
+                        .padding(.vertical, 4)
                     }
-                    .pickerStyle(.menu)
                 }
             }
             .navigationTitle("新しいミス記録")
@@ -247,7 +322,7 @@ struct AddMissListItemView: View {
     }
     
     private func saveMissItem() {
-        let missItem = MissListItem(title: title, content: content, imageData: selectedImage)
+        let missItem = MissListItem(title: title, content: content, imageData: autoSelectedImage)
         modelContext.insert(missItem)
         dismiss()
     }
@@ -345,15 +420,12 @@ struct MissListDetailView: View {
         }
     }
 }
-
 struct EditMissListItemView: View {
     @Environment(\.dismiss) private var dismiss
-    @Query private var images: [ImageData]
     
     let missItem: MissListItem
     @State private var title: String = ""
     @State private var content: String = ""
-    @State private var selectedImage: ImageData?
     
     var body: some View {
         NavigationView {
@@ -364,21 +436,40 @@ struct EditMissListItemView: View {
                         .lineLimit(3...6)
                 }
                 
-                Section("関連する画像（任意）") {
-                    Picker("画像を選択", selection: $selectedImage) {
-                        Text("選択なし").tag(ImageData?.none)
-                        ForEach(images, id: \.id) { image in
-                            HStack {
-                                Text(image.tags.map { $0.displayName }.joined(separator: ", "))
-                                if let taskName = image.taskName {
-                                    Text("- \(taskName.name)")
+                // 関連する画像がある場合は表示（編集不可）
+                if let imageData = missItem.imageData {
+                    Section("関連する画像") {
+                        HStack {
+                            if let image = imageData.image {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 60, height: 60)
+                                    .clipped()
+                                    .cornerRadius(8)
+                            } else {
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 60, height: 60)
+                                    .cornerRadius(8)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(imageData.tags.map { $0.displayName }.joined(separator: ", "))
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                if let taskName = imageData.taskName {
+                                    Text(taskName.name)
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
                             }
-                            .tag(image as ImageData?)
+                            
+                            Spacer()
                         }
+                        .padding(.vertical, 4)
                     }
-                    .pickerStyle(.menu)
                 }
             }
             .navigationTitle("ミス記録を編集")
@@ -401,13 +492,12 @@ struct EditMissListItemView: View {
         .onAppear {
             title = missItem.title
             content = missItem.content
-            selectedImage = missItem.imageData
         }
     }
     
     private func updateMissItem() {
         missItem.updateContent(title: title, content: content)
-        missItem.imageData = selectedImage
+        // 画像の関連付けは変更しない（元の関連付けを維持）
         dismiss()
     }
 }

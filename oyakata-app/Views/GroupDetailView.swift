@@ -16,6 +16,11 @@ struct GroupDetailView: View {
         return 160
     }
     
+    // グループに関連するミスリストを取得
+    var groupMissItems: [MissListItem] {
+        return group.images.flatMap { $0.missListItems }.sorted { $0.createdAt > $1.createdAt }
+    }
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -86,6 +91,39 @@ struct GroupDetailView: View {
                     .padding(.horizontal)
                 }
                 
+                // ミスリスト一覧セクション
+                if !groupMissItems.isEmpty {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "list.bullet.clipboard")
+                                .foregroundColor(.red)
+                                .font(.title2)
+                            Text("ミスリスト")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Text("\(groupMissItems.count)件")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
+                        
+                        LazyVStack(spacing: 8) {
+                            ForEach(groupMissItems, id: \.id) { missItem in
+                                NavigationLink(destination: EditMissListItemView(missItem: missItem)) {
+                                    GroupMissListRowView(missItem: missItem)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical, 16)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                }
+                
                 Spacer(minLength: 20)
             }
         }
@@ -96,6 +134,81 @@ struct GroupDetailView: View {
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: date)
+    }
+}
+
+// ミスリスト行表示用のコンポーネント
+struct GroupMissListRowView: View {
+    let missItem: MissListItem
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // アイコン
+            Image(systemName: missItem.isResolved ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundColor(missItem.isResolved ? .green : .red)
+                .font(.system(size: 20))
+            
+            VStack(alignment: .leading, spacing: 6) {
+                // タイトル
+                Text(missItem.title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                // 内容
+                if !missItem.content.isEmpty {
+                    Text(missItem.content)
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                }
+                
+                // 作成日時
+                HStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Text(formatMissItemDate(missItem.createdAt))
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    
+                    if missItem.isResolved {
+                        Text("解決済み")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green)
+                            .cornerRadius(6)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // 矢印アイコン
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(Color(.systemBackground))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(.systemGray5), lineWidth: 1)
+        )
+    }
+    
+    private func formatMissItemDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
         formatter.timeStyle = .short
         formatter.locale = Locale(identifier: "ja_JP")
         return formatter.string(from: date)
