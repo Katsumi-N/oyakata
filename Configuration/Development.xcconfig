@@ -1,0 +1,15 @@
+// Development.xcconfig
+// Configuration for Development environment
+
+// Include base configuration
+#include "Base.xcconfig"
+
+// API Configuration
+API_BASE_URL = https:/$()/dev-oyakata.naya-katsumi.workers.dev
+
+// App Info
+PRODUCT_BUNDLE_IDENTIFIER = name.katsumi.oyakata-app.dev
+PRODUCT_NAME = oyakata-dev
+
+// Environment indicator
+ENVIRONMENT_NAME = Development

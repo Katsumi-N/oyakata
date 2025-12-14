@@ -1,0 +1,16 @@
+// Base.xcconfig
+// Shared configuration for all environments
+
+// Minimum deployment target
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+
+// Code signing
+DEVELOPMENT_TEAM = 66Y2KZRC85
+
+// Swift settings
+SWIFT_VERSION = 5.0
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+
+// Other common settings
+ENABLE_TESTABILITY = YES
+ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES

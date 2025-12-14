@@ -1,0 +1,19 @@
+// Production.xcconfig
+// Configuration for Production environment
+
+// Include base configuration
+#include "Base.xcconfig"
+
+// API Configuration
+API_BASE_URL = https:/$()/prod-oyakata.naya-katsumi.workers.dev
+
+// App Info
+PRODUCT_BUNDLE_IDENTIFIER = name.katsumi.oyakata-app
+PRODUCT_NAME = oyakata
+
+// Environment indicator
+ENVIRONMENT_NAME = Production
+
+// Production optimizations
+SWIFT_OPTIMIZATION_LEVEL = -O
+ENABLE_TESTABILITY = NO

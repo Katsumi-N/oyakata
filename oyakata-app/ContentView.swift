@@ -9,7 +9,6 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @EnvironmentObject var services: ServiceContainer
     @State private var showingMigrationAlert = false
     @State private var imageMigrationCompleted = false
 
@@ -17,13 +16,6 @@ struct ContentView: View {
         TabView {
             NavigationView {
                 ImageGridView()
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            NavigationLink(destination: SettingsView()) {
-                                Image(systemName: "gearshape")
-                            }
-                        }
-                    }
             }
             .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
@@ -33,13 +25,6 @@ struct ContentView: View {
 
             NavigationView {
                 MissListView()
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            NavigationLink(destination: SettingsView()) {
-                                Image(systemName: "gearshape")
-                            }
-                        }
-                    }
             }
             .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
@@ -72,5 +57,4 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .modelContainer(for: ImageData.self, inMemory: true)
-        .environmentObject(ServiceContainer.shared)
 }

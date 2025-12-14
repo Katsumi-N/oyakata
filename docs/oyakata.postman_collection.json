@@ -1,0 +1,225 @@
+{
+	"info": {
+		"_postman_id": "da56e015-9b27-41b4-b066-a39b9de90cd8",
+		"name": "oyakata",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "26427803"
+	},
+	"item": [
+		{
+			"name": "/v1/anonymous/register",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8787/v1/anonymous/register",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8787",
+					"path": [
+						"v1",
+						"anonymous",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/v1/images/upload-url",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "OYAKATA-HMAC deviceId=39960f92-df6f-44c6-b82a-5d6f0ca440ab,signature=dummy,nonce=n1,v=1",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"contentType\": \"image/jpeg\",\n    \"sizeBytes\": 1234\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{domain}}/v1/images/upload-url",
+					"host": [
+						"{{domain}}"
+					],
+					"path": [
+						"v1",
+						"images",
+						"upload-url"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/v1/images/:imageId",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer d459a185-f507-4245-bd2b-db00c00f0f7c.qwyAcAnbLQA2BNHHtUw9V1_6_uMrmawyGWzorsD_HN8",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/v1/images/:imageId",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v1",
+						"images",
+						":imageId"
+					],
+					"variable": [
+						{
+							"key": "imageId",
+							"value": "3a8014c1-b4e5-4379-8f32-02bba109b127"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/v1/auth/refresh",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer efA_2ELEBfDBhCLl0Db_sy0PRWj4feNAvNFG1qdLH-A",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"device_id\": \"835c00ae-c039-41ee-a247-003da3eea23c\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v1/auth/refresh",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v1",
+						"auth",
+						"refresh"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "upload image to R2",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "image/jpeg",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "file",
+					"file": {
+						"src": "/Users/naya.katsumi/Downloads/kairyu.jpg"
+					}
+				},
+				"url": {
+					"raw": "https://dev-account.r2.cloudflarestorage.com/oyakata-image/d459a185-f507-4245-bd2b-db00c00f0f7c/images/e9c79081-c8c1-484c-88dd-8bb99526d0fc?X-Amz-Date=20251130T080731Z&X-Amz-Expires=86400&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=TESTACCESSKEYID%2F20251130%2Fauto%2Fs3%2Faws4_request&X-Amz-SignedHeaders=content-type%3Bhost&X-Amz-Signature=8207b7d8f535ce11e4ed77b78195f513fb144b8b928357fd2dc7b6fd653236c9",
+					"protocol": "https",
+					"host": [
+						"dev-account",
+						"r2",
+						"cloudflarestorage",
+						"com"
+					],
+					"path": [
+						"oyakata-image",
+						"d459a185-f507-4245-bd2b-db00c00f0f7c",
+						"images",
+						"e9c79081-c8c1-484c-88dd-8bb99526d0fc"
+					],
+					"query": [
+						{
+							"key": "X-Amz-Date",
+							"value": "20251130T080731Z"
+						},
+						{
+							"key": "X-Amz-Expires",
+							"value": "86400"
+						},
+						{
+							"key": "X-Amz-Algorithm",
+							"value": "AWS4-HMAC-SHA256"
+						},
+						{
+							"key": "X-Amz-Credential",
+							"value": "TESTACCESSKEYID%2F20251130%2Fauto%2Fs3%2Faws4_request"
+						},
+						{
+							"key": "X-Amz-SignedHeaders",
+							"value": "content-type%3Bhost"
+						},
+						{
+							"key": "X-Amz-Signature",
+							"value": "8207b7d8f535ce11e4ed77b78195f513fb144b8b928357fd2dc7b6fd653236c9"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}
