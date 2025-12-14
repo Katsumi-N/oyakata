@@ -30,7 +30,15 @@ final class APIClient: APIClientProtocol {
     private let session: URLSession
 
     init(session: URLSession = .shared) {
-        self.session = session
+        // カスタムURLSessionを設定
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = APIConfig.timeout
+        configuration.timeoutIntervalForResource = APIConfig.timeout * 2
+        configuration.waitsForConnectivity = true
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+
+
+        self.session = URLSession(configuration: configuration)
     }
 
     func request<T: Decodable>(
@@ -47,8 +55,10 @@ final class APIClient: APIClientProtocol {
             throw NetworkError.invalidURL
         }
 
-        var request = URLRequest(url: url, timeoutInterval: APIConfig.timeout)
+        var request = URLRequest(url: url)
         request.httpMethod = endpoint.method.rawValue
+        request.timeoutInterval = APIConfig.timeout
+        request.cachePolicy = .reloadIgnoringLocalCacheData
 
         // ボディを設定
         if let body = try endpoint.body() {
@@ -65,7 +75,15 @@ final class APIClient: APIClientProtocol {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
+        // デバッグログ
+        print("🌐 API Request: \(endpoint.method.rawValue) \(url)")
+        if let token = bearerToken {
+            print("🔑 Token: \(token.prefix(20))...")
+        }
+
         let (data, response) = try await session.data(for: request)
+
+        print("📥 API Response: \(data.count) bytes")
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.unknown(NSError(domain: "", code: -1, userInfo: nil))
@@ -99,7 +117,30 @@ final class APIClient: APIClientProtocol {
         // デコード
         do {
             let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            // ミリ秒を含むISO8601形式に対応
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateString = try container.decode(String.self)
+
+                // ISO8601DateFormatterでミリ秒を含む形式をパース
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+
+                // ミリ秒なしの形式も試す
+                formatter.formatOptions = [.withInternetDateTime]
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "日付文字列をデコードできませんでした: \(dateString)"
+                )
+            }
             return try decoder.decode(T.self, from: data)
         } catch {
             throw NetworkError.decodingError(error)

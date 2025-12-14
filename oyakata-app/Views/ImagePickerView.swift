@@ -217,17 +217,15 @@ struct ImagePickerView: View {
     }
     
     private func saveImageToDocuments(_ image: UIImage, groupId: UUID? = nil, groupCreatedAt: Date? = nil) async {
-        // 画像をメモリ効率的にリサイズ
+        // 画像をメモリ効率的にリサイズ（元画像用）
         let optimizedImage = await optimizeImage(image)
-        guard let imageData = optimizedImage.jpegData(compressionQuality: 0.7) else { return }
 
         let fileName = "\(UUID().uuidString).jpg"
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsPath.appendingPathComponent(fileName)
 
         do {
-            try imageData.write(to: fileURL)
-
+            // ImageDataモデルを先に作成
             let imageDataModel = await MainActor.run { () -> ImageData in
                 let taskName = getOrCreateTaskName()
                 let imageDataModel = ImageData(
@@ -242,14 +240,26 @@ struct ImagePickerView: View {
                 return imageDataModel
             }
 
-            // バックグラウンドでアップロード
+            // バックグラウンドでアップロードと画像生成
             Task.detached {
                 do {
                     let uploadManager = ServiceLocator.shared.imageUploadManager
+                    let cacheManager = ServiceLocator.shared.imageCacheManager
+
+                    // ImageUploadManagerで3サイズ生成・保存・アップロード
                     try await uploadManager.uploadImage(imageDataModel, image: optimizedImage)
+
+                    // thumbnail (300px)をfilePathにも保存（後方互換性のため）
+                    if let thumbnailData = try? await cacheManager.loadThumbnail(for: imageDataModel.id),
+                       let jpegData = thumbnailData.jpegData(compressionQuality: 0.7) {
+                        try? jpegData.write(to: fileURL)
+                    }
                 } catch {
                     print("画像のアップロードに失敗しました: \(error)")
-                    // エラーはログのみ、ローカル保存は既に成功しているので続行
+                    // エラー時はローカルにフルサイズを保存（フォールバック）
+                    if let fallbackData = optimizedImage.jpegData(compressionQuality: 0.7) {
+                        try? fallbackData.write(to: fileURL)
+                    }
                 }
             }
         } catch {

@@ -67,13 +67,26 @@ struct ImageEditView: View {
     }
     
     private func loadOptimizedImage() async {
+        // Apple Pencil編集用にlargeサイズ（2048px）をCDNから取得
+        let storageStrategy = ServiceLocator.shared.imageStorageStrategy
+
+        do {
+            if let largeImage = try await storageStrategy.getImage(for: imageData, size: .large) {
+                optimizedImage = largeImage
+                return
+            }
+        } catch {
+            print("CDNから画像取得失敗: \(error)")
+        }
+
+        // フォールバック: ローカル画像を使用（既存データの場合）
         guard let originalImage = imageData.image else { return }
-        
+
         let optimized = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let maxDimension: CGFloat = 1024 // 編集用にさらに小さく
+                let maxDimension: CGFloat = 2048 // largeサイズと同じ
                 let size = originalImage.size
-                
+
                 if max(size.width, size.height) <= maxDimension {
                     continuation.resume(returning: originalImage)
                     return

@@ -11,12 +11,13 @@ import SwiftData
 struct ImageDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    
+
     let imageData: ImageData
     @State private var showingEditView = false
     @State private var showingDeleteAlert = false
     @State private var showingAddMissView = false
     @State private var showingTimeRecordView = false
+    @State private var displayImage: UIImage?
     
     var body: some View {
         GeometryReader { geometry in
@@ -91,29 +92,49 @@ struct ImageDetailView: View {
     
     @ViewBuilder
     private func imageSection(geometry: GeometryProxy) -> some View {
-        if let image = imageData.image {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: geometry.size.width - 32,
-                       maxHeight: geometry.size.height * 0.6)
-                .cornerRadius(12)
-                .shadow(radius: 4)
-        } else {
-            Rectangle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: geometry.size.width - 32,
-                       height: geometry.size.height * 0.4)
-                .cornerRadius(12)
-                .overlay(
-                    VStack {
-                        Image(systemName: "photo")
-                            .font(.system(size: 50))
-                        Text("画像を読み込めません")
-                            .font(.caption)
-                    }
-                    .foregroundColor(.gray)
-                )
+        ZStack {
+            if let image = displayImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: geometry.size.width - 32,
+                           maxHeight: geometry.size.height * 0.6)
+                    .cornerRadius(12)
+                    .shadow(radius: 4)
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: geometry.size.width - 32,
+                           height: geometry.size.height * 0.4)
+                    .cornerRadius(12)
+                    .overlay(
+                        ProgressView()
+                    )
+            }
+        }
+        .task {
+            await loadDisplayImage()
+        }
+    }
+
+    private func loadDisplayImage() async {
+        // 詳細画面用にmediumサイズ（1024px）を取得
+        let storageStrategy = ServiceLocator.shared.imageStorageStrategy
+
+        do {
+            if let mediumImage = try await storageStrategy.getImage(for: imageData, size: .medium) {
+                await MainActor.run {
+                    displayImage = mediumImage
+                }
+                return
+            }
+        } catch {
+            print("Medium画像取得失敗: \(error)")
+        }
+
+        // フォールバック: ローカル画像を使用（既存データの場合）
+        await MainActor.run {
+            displayImage = imageData.image
         }
     }
     
@@ -476,10 +497,11 @@ struct MissListItemCard: View {
 struct AddMissFromImageView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    
+
     let imageData: ImageData
     @State private var title = ""
     @State private var content = ""
+    @State private var thumbnailImage: UIImage?
     
     var body: some View {
         NavigationView {
@@ -492,7 +514,7 @@ struct AddMissFromImageView: View {
                 
                 Section("関連する画像") {
                     HStack {
-                        if let image = imageData.image {
+                        if let image = thumbnailImage {
                             Image(uiImage: image)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -504,6 +526,10 @@ struct AddMissFromImageView: View {
                                 .fill(Color.gray.opacity(0.3))
                                 .frame(width: 60, height: 60)
                                 .cornerRadius(8)
+                                .overlay(
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                )
                         }
                         
                         VStack(alignment: .leading, spacing: 4) {
@@ -531,13 +557,25 @@ struct AddMissFromImageView: View {
                         dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") {
                         saveMissItem()
                     }
                     .disabled(title.isEmpty || content.isEmpty)
                 }
+            }
+            .task {
+                await loadThumbnail()
+            }
+        }
+    }
+
+    private func loadThumbnail() async {
+        let storageStrategy = ServiceLocator.shared.imageStorageStrategy
+        if let thumbnail = try? await storageStrategy.getImage(for: imageData, size: .thumbnail) {
+            await MainActor.run {
+                thumbnailImage = thumbnail
             }
         }
     }

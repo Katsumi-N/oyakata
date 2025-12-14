@@ -47,15 +47,21 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
             // 3サイズを生成
             let sizes = await sizeGenerator.generateSizes(from: image)
 
-            // サムネイルをローカル保存
+            // thumbnail（300px）をローカル保存 - サムネイル表示用
             if let thumbnailData = sizes[.thumbnail] {
                 await cacheManager.saveThumbnail(thumbnailData, for: imageData.id)
                 await updateStoredSizes(imageData, add: .thumbnail)
             }
 
-            // 各サイズをアップロード
-            for (size, data) in sizes {
-                try await uploadSize(data, size: size, imageData: imageData)
+            // medium（1024px）をローカル保存 - 詳細画面表示用
+            if let mediumData = sizes[.medium] {
+                await cacheManager.saveImage(mediumData, imageId: imageData.id.uuidString, size: .medium)
+                await updateStoredSizes(imageData, add: .medium)
+            }
+
+            // large（2048px）のみをR2にアップロード - Apple Pencil編集用
+            if let largeData = sizes[.large] {
+                try await uploadSize(largeData, size: .large, imageData: imageData)
             }
 
             // 成功

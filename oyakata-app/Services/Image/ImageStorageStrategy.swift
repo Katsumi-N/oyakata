@@ -28,10 +28,16 @@ final class ImageStorageStrategy: ImageStorageStrategyProtocol {
     }
 
     func getImage(for imageData: ImageData, size: ImageSize) async throws -> UIImage? {
-        // サムネイルの場合はローカル優先
+        // thumbnail（300px）とmedium（1024px）はローカルのみ
         if size == .thumbnail {
             if let thumbnail = await cacheManager.loadThumbnail(for: imageData.id) {
                 return thumbnail
+            }
+        }
+
+        if size == .medium {
+            if let medium = await cacheManager.loadImage(imageId: imageData.id.uuidString, size: .medium) {
+                return medium
             }
         }
 
@@ -40,7 +46,11 @@ final class ImageStorageStrategy: ImageStorageStrategyProtocol {
             return imageData.image // 既存の実装を使用
         }
 
-        // リモートから取得
+        // large（2048px）のみリモートから取得
+        guard size == .large else {
+            return nil // thumbnail/mediumでローカルになければnil
+        }
+
         guard let remoteImageId = imageData.remoteImageId else {
             return nil
         }
