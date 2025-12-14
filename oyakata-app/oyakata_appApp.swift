@@ -10,11 +10,21 @@ import SwiftData
 
 @main
 struct oyakata_appApp: App {
+    @StateObject private var serviceContainer = ServiceContainer.shared
+
+    init() {
+        // デバッグビルドでAPI設定を出力
+        #if DEBUG
+        APIConfiguration.printConfiguration()
+        #endif
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ImageData.self,
             TaskName.self,
             MissListItem.self,
+            TimeRecord.self,
         ])
         
         let modelConfiguration = ModelConfiguration(
@@ -46,6 +56,7 @@ struct oyakata_appApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(serviceContainer)
         }
         .modelContainer(sharedModelContainer)
     }

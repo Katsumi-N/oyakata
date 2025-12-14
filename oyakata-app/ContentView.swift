@@ -9,21 +9,37 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @EnvironmentObject var services: ServiceContainer
     @State private var showingMigrationAlert = false
-    
+    @State private var imageMigrationCompleted = false
+
     var body: some View {
         TabView {
             NavigationView {
                 ImageGridView()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            NavigationLink(destination: SettingsView()) {
+                                Image(systemName: "gearshape")
+                            }
+                        }
+                    }
             }
             .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
                     Image(systemName: "doc.on.doc")
                     Text("図面一覧")
                 }
-            
+
             NavigationView {
                 MissListView()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            NavigationLink(destination: SettingsView()) {
+                                Image(systemName: "gearshape")
+                            }
+                        }
+                    }
             }
             .navigationViewStyle(StackNavigationViewStyle())
                 .tabItem {
@@ -56,4 +72,5 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .modelContainer(for: ImageData.self, inMemory: true)
+        .environmentObject(ServiceContainer.shared)
 }
