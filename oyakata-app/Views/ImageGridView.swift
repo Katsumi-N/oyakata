@@ -363,13 +363,14 @@ struct ImageGridItemView: View {
 
 struct GroupGridItemView: View {
     let group: ImageGroup
-    
+    @State private var thumbnail: UIImage?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             // 画像スタック
             ZStack {
-                if let image = group.representativeImage.image {
-                    Image(uiImage: image)
+                if let thumbnail = thumbnail {
+                    Image(uiImage: thumbnail)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 140, height: 140)
@@ -381,9 +382,7 @@ struct GroupGridItemView: View {
                         .frame(width: 140, height: 140)
                         .cornerRadius(8)
                         .overlay(
-                            Image(systemName: "photo")
-                                .foregroundColor(.gray)
-                                .font(.title2)
+                            ProgressView()
                         )
                 }
                 
@@ -422,7 +421,10 @@ struct GroupGridItemView: View {
                     .zIndex(1)
                 }
             }
-            
+            .task {
+                await loadThumbnail()
+            }
+
             // メタデータ（「グループ」表示なし）
             VStack(alignment: .leading, spacing: 6) {
                 if !group.representativeImage.tags.isEmpty {
@@ -464,6 +466,11 @@ struct GroupGridItemView: View {
         .padding(8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
+    }
+
+    private func loadThumbnail() async {
+        let storageStrategy = ServiceLocator.shared.imageStorageStrategy
+        thumbnail = try? await storageStrategy.getImage(for: group.representativeImage, size: .thumbnail)
     }
 }
 

@@ -11,8 +11,6 @@ import SwiftData
 @main
 struct oyakata_appApp: App {
 
-    init() {}
-
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ImageData.self,
@@ -50,6 +48,12 @@ struct oyakata_appApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .task {
+                    // アプリ起動時に失敗したアップロードを再試行
+                    let uploadManager = ServiceLocator.shared.imageUploadManager
+                    let modelContext = ModelContext(sharedModelContainer)
+                    await uploadManager.retryFailedUploads(modelContext: modelContext)
+                }
         }
         .modelContainer(sharedModelContainer)
     }

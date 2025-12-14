@@ -220,15 +220,15 @@ struct ImagePickerView: View {
         // 画像をメモリ効率的にリサイズ
         let optimizedImage = await optimizeImage(image)
         guard let imageData = optimizedImage.jpegData(compressionQuality: 0.7) else { return }
-        
+
         let fileName = "\(UUID().uuidString).jpg"
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsPath.appendingPathComponent(fileName)
-        
+
         do {
             try imageData.write(to: fileURL)
-            
-            await MainActor.run {
+
+            let imageDataModel = await MainActor.run { () -> ImageData in
                 let taskName = getOrCreateTaskName()
                 let imageDataModel = ImageData(
                     fileName: fileName,
@@ -239,6 +239,18 @@ struct ImagePickerView: View {
                     groupCreatedAt: groupCreatedAt
                 )
                 modelContext.insert(imageDataModel)
+                return imageDataModel
+            }
+
+            // バックグラウンドでアップロード
+            Task.detached {
+                do {
+                    let uploadManager = ServiceLocator.shared.imageUploadManager
+                    try await uploadManager.uploadImage(imageDataModel, image: optimizedImage)
+                } catch {
+                    print("画像のアップロードに失敗しました: \(error)")
+                    // エラーはログのみ、ローカル保存は既に成功しているので続行
+                }
             }
         } catch {
             print("画像の保存に失敗しました: \(error)")

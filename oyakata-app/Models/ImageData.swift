@@ -20,13 +20,21 @@ final class ImageData {
     var hasAnnotations: Bool
     var groupId: UUID?
     var groupCreatedAt: Date?
-    
+
+    // 画像最適化関連の新規プロパティ
+    var remoteImageId: String?
+    var uploadStatus: ImageUploadStatus
+    var uploadedAt: Date?
+    var lastUploadAttempt: Date?
+    var uploadRetryCount: Int
+    var storedSizes: [ImageSize]
+
     @Relationship(deleteRule: .nullify)
     var taskName: TaskName?
-    
+
     @Relationship(deleteRule: .cascade, inverse: \MissListItem.imageData)
     var missListItems: [MissListItem] = []
-    
+
     @Relationship(deleteRule: .cascade)
     var timeRecord: TimeRecord?
     
@@ -41,6 +49,11 @@ final class ImageData {
         self.hasAnnotations = false
         self.groupId = groupId
         self.groupCreatedAt = groupCreatedAt
+
+        // 画像最適化関連の初期化
+        self.uploadStatus = .localOnly
+        self.uploadRetryCount = 0
+        self.storedSizes = []
     }
     
     var image: UIImage? {
@@ -124,5 +137,18 @@ final class ImageData {
     /// 時間記録があるかどうか
     var hasTimeRecord: Bool {
         return timeRecord?.hasTimeRecorded ?? false
+    }
+
+    // MARK: - 画像最適化関連
+
+    /// 画像がローカルのみか、リモートにもあるか
+    var isRemoteAvailable: Bool {
+        return remoteImageId != nil && uploadStatus == .completed
+    }
+
+    /// サムネイルのローカルパス
+    var thumbnailPath: String? {
+        guard storedSizes.contains(.thumbnail) else { return nil }
+        return "\(id.uuidString)_thumbnail.jpg"
     }
 }
