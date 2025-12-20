@@ -26,18 +26,20 @@ enum ImageSize: String, Codable, CaseIterable {
 }
 
 protocol ImageSizeGeneratorProtocol {
-    func generateSizes(from image: UIImage) async -> [ImageSize: Data]
+    func generateSizes(from image: UIImage, preserveFormat: ImageFormat) async -> [ImageSize: Data]
 }
 
 final class ImageSizeGenerator: ImageSizeGeneratorProtocol {
-    func generateSizes(from image: UIImage) async -> [ImageSize: Data] {
+    func generateSizes(from image: UIImage, preserveFormat: ImageFormat) async -> [ImageSize: Data] {
         await withTaskGroup(of: (ImageSize, Data?).self) { group in
             var result: [ImageSize: Data] = [:]
 
             for size in ImageSize.allCases {
                 group.addTask {
                     let resized = await self.resize(image, to: size.maxDimension)
-                    let data = resized.jpegData(compressionQuality: self.compressionQuality(for: size))
+                    // Largeサイズのみ元の形式を保持、Thumbnail/MediumはJPEG
+                    let format: ImageFormat = (size == .large) ? preserveFormat : .jpeg
+                    let data = ImageFormatHandler.encode(resized, as: format, quality: self.compressionQuality(for: size))
                     return (size, data)
                 }
             }
@@ -57,23 +59,27 @@ final class ImageSizeGenerator: ImageSizeGeneratorProtocol {
             DispatchQueue.global(qos: .userInitiated).async {
                 let size = image.size
 
+                // 実際のピクセルサイズを計算（scale考慮）
+                let actualWidth = size.width * image.scale
+                let actualHeight = size.height * image.scale
+
                 // リサイズが不要な場合はそのまま返す
-                if max(size.width, size.height) <= maxDimension {
+                if max(actualWidth, actualHeight) <= maxDimension {
                     continuation.resume(returning: image)
                     return
                 }
 
                 // アスペクト比を保持してリサイズ
-                let aspectRatio = size.width / size.height
+                let aspectRatio = actualWidth / actualHeight
                 let newSize: CGSize
 
-                if size.width > size.height {
+                if actualWidth > actualHeight {
                     newSize = CGSize(width: maxDimension, height: maxDimension / aspectRatio)
                 } else {
                     newSize = CGSize(width: maxDimension * aspectRatio, height: maxDimension)
                 }
 
-                // メモリ効率的なリサイズ
+                // メモリ効率的なリサイズ（scale = 1.0で作成）
                 let renderer = UIGraphicsImageRenderer(size: newSize)
                 let resizedImage = renderer.image { _ in
                     image.draw(in: CGRect(origin: .zero, size: newSize))
@@ -86,8 +92,8 @@ final class ImageSizeGenerator: ImageSizeGeneratorProtocol {
 
     private func compressionQuality(for size: ImageSize) -> CGFloat {
         switch size {
-        case .thumbnail: return 0.7
-        case .medium: return 0.8
+        case .thumbnail: return 0.6
+        case .medium: return 0.7
         case .large: return 0.85
         }
     }

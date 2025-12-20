@@ -180,9 +180,29 @@ struct ImagePickerView: View {
             
             // PhotosPickerの画像を処理
             for item in selectedItems {
+                // データをロードする前にPhotoPickerItemからフォーマットを検出
+                let expectedFormat = ImageFormatHandler.detectFormat(from: item)
+                print("📸 PhotosPicker: アイテムから検出されたフォーマット = \(expectedFormat)")
+
                 if let data = try? await item.loadTransferable(type: Data.self),
                    let uiImage = UIImage(data: data) {
-                    await saveImageToDocuments(uiImage, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                    print("📸 PhotosPicker: データ読み込み成功（\(data.count) bytes）")
+                    // ロード後のデータから実際のフォーマットを検出
+                    let actualFormat = ImageFormatHandler.detectFormat(from: data)
+                    print("📸 PhotosPicker: データから検出されたフォーマット = \(actualFormat)")
+
+                    // 実際のフォーマットを使用（PhotosPickerが自動変換する場合があるため）
+                    // ただし、元の形式がHEICの場合は、それを保持したい意図として扱う
+                    let format: ImageFormat
+                    if expectedFormat == .heic && actualFormat == .jpeg {
+                        print("⚠️ PhotosPicker: HEICがJPEGに自動変換されました。元の形式を保持するにはDocumentPickerを使用してください。")
+                        // HEICとしてアップロードを試みる（JPEG→HEICエンコード）
+                        format = expectedFormat
+                    } else {
+                        format = actualFormat
+                    }
+
+                    await saveImageToDocuments(uiImage, format: format, groupId: groupId, groupCreatedAt: groupCreatedAt)
                 }
             }
             
@@ -190,18 +210,22 @@ struct ImagePickerView: View {
             for documentURL in selectedDocuments {
                 if documentURL.startAccessingSecurityScopedResource() {
                     defer { documentURL.stopAccessingSecurityScopedResource() }
-                    
+
                     do {
-                        if documentURL.pathExtension.lowercased() == "pdf" {
-                            // PDFを画像に変換
-                            if let uiImage = await convertPDFToImage(url: documentURL) {
-                                await saveImageToDocuments(uiImage, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                        // フォーマット検出
+                        let format = ImageFormatHandler.detectFormat(from: documentURL)
+                        let data = try Data(contentsOf: documentURL)
+
+                        if format == .pdf {
+                            // PDFは画像に変換せず、PDFデータとして処理
+                            // サムネイル用に最初のページを画像化
+                            if let thumbnail = await convertPDFToImage(url: documentURL) {
+                                await savePDFToDocuments(pdfData: data, thumbnail: thumbnail, format: format, groupId: groupId, groupCreatedAt: groupCreatedAt)
                             }
                         } else {
                             // 通常の画像ファイル
-                            let data = try Data(contentsOf: documentURL)
                             if let uiImage = UIImage(data: data) {
-                                await saveImageToDocuments(uiImage, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                                await saveImageToDocuments(uiImage, format: format, groupId: groupId, groupCreatedAt: groupCreatedAt)
                             }
                         }
                     } catch {
@@ -216,7 +240,7 @@ struct ImagePickerView: View {
         }
     }
     
-    private func saveImageToDocuments(_ image: UIImage, groupId: UUID? = nil, groupCreatedAt: Date? = nil) async {
+    private func saveImageToDocuments(_ image: UIImage, format: ImageFormat, groupId: UUID? = nil, groupCreatedAt: Date? = nil) async {
         // 画像をメモリ効率的にリサイズ（元画像用）
         let optimizedImage = await optimizeImage(image)
 
@@ -247,7 +271,7 @@ struct ImagePickerView: View {
                     let cacheManager = ServiceLocator.shared.imageCacheManager
 
                     // ImageUploadManagerで3サイズ生成・保存・アップロード
-                    try await uploadManager.uploadImage(imageDataModel, image: optimizedImage)
+                    try await uploadManager.uploadImage(imageDataModel, image: optimizedImage, format: format)
 
                     // thumbnail (300px)をfilePathにも保存（後方互換性のため）
                     if let thumbnailData = try? await cacheManager.loadThumbnail(for: imageDataModel.id),
@@ -267,6 +291,67 @@ struct ImagePickerView: View {
         }
     }
     
+    private func savePDFToDocuments(pdfData: Data, thumbnail: UIImage, format: ImageFormat, groupId: UUID? = nil, groupCreatedAt: Date? = nil) async {
+        let fileName = "\(UUID().uuidString).pdf"
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let fileURL = documentsPath.appendingPathComponent(fileName)
+
+        do {
+            // ImageDataモデルを先に作成
+            let imageDataModel = await MainActor.run { () -> ImageData in
+                let taskName = getOrCreateTaskName()
+                let imageDataModel = ImageData(
+                    fileName: fileName,
+                    filePath: fileName,
+                    tags: Array(selectedTags),
+                    taskName: taskName,
+                    groupId: groupId,
+                    groupCreatedAt: groupCreatedAt
+                )
+                modelContext.insert(imageDataModel)
+                return imageDataModel
+            }
+
+            // バックグラウンドでアップロードと画像生成
+            Task.detached {
+                do {
+                    let uploadManager = ServiceLocator.shared.imageUploadManager
+                    let cacheManager = ServiceLocator.shared.imageCacheManager
+
+                    // サムネイル・Mediumサイズを生成（画像化したもの）
+                    let sizeGenerator = ServiceLocator.shared.imageSizeGenerator
+                    let sizes = await sizeGenerator.generateSizes(from: thumbnail, preserveFormat: .jpeg)
+
+                    // thumbnail（300px）をローカル保存
+                    if let thumbnailData = sizes[.thumbnail] {
+                        await cacheManager.saveThumbnail(thumbnailData, for: imageDataModel.id)
+                    }
+
+                    // medium（1024px）をローカル保存
+                    if let mediumData = sizes[.medium] {
+                        await cacheManager.saveImage(mediumData, imageId: imageDataModel.id.uuidString, size: .medium)
+                    }
+
+                    // 元のPDFデータをlargeとしてアップロード
+                    try await uploadManager.uploadPDF(imageDataModel, pdfData: pdfData, format: format)
+
+                    // thumbnail (300px)をfilePathにも保存（後方互換性のため）
+                    if let thumbnailData = sizes[.thumbnail] {
+                        try? thumbnailData.write(to: fileURL)
+                    }
+                } catch {
+                    print("PDFのアップロードに失敗しました: \(error)")
+                    // エラー時はローカルにサムネイルを保存（フォールバック）
+                    if let fallbackData = thumbnail.jpegData(compressionQuality: 0.7) {
+                        try? fallbackData.write(to: fileURL)
+                    }
+                }
+            }
+        } catch {
+            print("PDFの保存に失敗しました: \(error)")
+        }
+    }
+
     private func convertPDFToImage(url: URL) async -> UIImage? {
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -299,29 +384,33 @@ struct ImagePickerView: View {
             DispatchQueue.global(qos: .userInitiated).async {
                 let maxDimension: CGFloat = 2048
                 let size = image.size
-                
+
+                // 実際のピクセルサイズを計算（scale考慮）
+                let actualWidth = size.width * image.scale
+                let actualHeight = size.height * image.scale
+
                 // リサイズが不要な場合はそのまま返す
-                if max(size.width, size.height) <= maxDimension {
+                if max(actualWidth, actualHeight) <= maxDimension {
                     continuation.resume(returning: image)
                     return
                 }
-                
+
                 // アスペクト比を保持してリサイズ
-                let aspectRatio = size.width / size.height
+                let aspectRatio = actualWidth / actualHeight
                 let newSize: CGSize
-                
-                if size.width > size.height {
+
+                if actualWidth > actualHeight {
                     newSize = CGSize(width: maxDimension, height: maxDimension / aspectRatio)
                 } else {
                     newSize = CGSize(width: maxDimension * aspectRatio, height: maxDimension)
                 }
-                
-                // メモリ効率的なリサイズ
+
+                // メモリ効率的なリサイズ（scale = 1.0で作成）
                 let renderer = UIGraphicsImageRenderer(size: newSize)
                 let resizedImage = renderer.image { _ in
                     image.draw(in: CGRect(origin: .zero, size: newSize))
                 }
-                
+
                 continuation.resume(returning: resizedImage)
             }
         }

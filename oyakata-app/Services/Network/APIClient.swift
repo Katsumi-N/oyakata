@@ -162,6 +162,9 @@ final class APIClient: APIClientProtocol {
             request.setValue(value, forHTTPHeaderField: key)
         }
 
+        // Content-Typeヘッダを明示的に設定
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+
         let (_, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {

@@ -10,6 +10,7 @@ import SwiftData
 
 @main
 struct oyakata_appApp: App {
+    @Environment(\.scenePhase) private var scenePhase
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -53,8 +54,38 @@ struct oyakata_appApp: App {
                     let uploadManager = ServiceLocator.shared.imageUploadManager
                     let modelContext = ModelContext(sharedModelContainer)
                     await uploadManager.retryFailedUploads(modelContext: modelContext)
+
+                    // アプリ起動時に削除キューを処理
+                    let deletionManager = ServiceLocator.shared.imageDeletionManager
+                    await deletionManager.processQueuedDeletions(modelContext: modelContext)
                 }
         }
         .modelContainer(sharedModelContainer)
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                startNetworkMonitoring()
+            } else if newPhase == .background {
+                stopNetworkMonitoring()
+            }
+        }
+    }
+
+    private func startNetworkMonitoring() {
+        let networkMonitor = ServiceLocator.shared.networkMonitor
+        let deletionManager = ServiceLocator.shared.imageDeletionManager
+
+        networkMonitor.startMonitoring { isConnected in
+            if isConnected {
+                // オンライン復帰時に削除キューを処理
+                Task { @MainActor in
+                    let modelContext = ModelContext(sharedModelContainer)
+                    await deletionManager.processQueuedDeletions(modelContext: modelContext)
+                }
+            }
+        }
+    }
+
+    private func stopNetworkMonitoring() {
+        ServiceLocator.shared.networkMonitor.stopMonitoring()
     }
 }

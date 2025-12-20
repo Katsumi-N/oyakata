@@ -17,7 +17,9 @@ enum ImageUploadStatus: String, Codable {
 }
 
 protocol ImageUploadManagerProtocol {
-    func uploadImage(_ imageData: ImageData, image: UIImage) async throws
+    func uploadImage(_ imageData: ImageData, image: UIImage, format: ImageFormat) async throws
+    func uploadPDF(_ imageData: ImageData, pdfData: Data, format: ImageFormat) async throws
+    func reuploadEditedImage(_ imageData: ImageData, editedImage: UIImage, format: ImageFormat?) async throws
     func retryFailedUploads(modelContext: ModelContext) async
 }
 
@@ -39,13 +41,13 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
         self.cacheManager = cacheManager
     }
 
-    func uploadImage(_ imageData: ImageData, image: UIImage) async throws {
+    func uploadImage(_ imageData: ImageData, image: UIImage, format: ImageFormat) async throws {
         // ステータスを更新
         await updateStatus(imageData, to: .uploading)
 
         do {
             // 3サイズを生成
-            let sizes = await sizeGenerator.generateSizes(from: image)
+            let sizes = await sizeGenerator.generateSizes(from: image, preserveFormat: format)
 
             // thumbnail（300px）をローカル保存 - サムネイル表示用
             if let thumbnailData = sizes[.thumbnail] {
@@ -61,12 +63,24 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
 
             // large（2048px）のみをR2にアップロード - Apple Pencil編集用
             if let largeData = sizes[.large] {
-                try await uploadSize(largeData, size: .large, imageData: imageData)
+                try await uploadSize(largeData, size: .large, imageData: imageData, contentType: format.mimeType)
             }
+
+            // フォーマット情報を保存
+            await updateOriginalFormat(imageData, format: format.mimeType)
 
             // 成功
             await updateStatus(imageData, to: .completed)
             await updateUploadedAt(imageData)
+
+            // アップロード完了通知を送信
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: .imageDidUpload,
+                    object: nil,
+                    userInfo: ["imageId": imageData.id]
+                )
+            }
 
         } catch {
             // 失敗
@@ -76,14 +90,96 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
         }
     }
 
-    private func uploadSize(_ data: Data, size: ImageSize, imageData: ImageData) async throws {
+    func uploadPDF(_ imageData: ImageData, pdfData: Data, format: ImageFormat) async throws {
+        // ステータスを更新
+        await updateStatus(imageData, to: .uploading)
+
+        do {
+            // PDFデータをそのままR2にアップロード
+            try await uploadSize(pdfData, size: .large, imageData: imageData, contentType: format.mimeType)
+
+            // フォーマット情報を保存
+            await updateOriginalFormat(imageData, format: format.mimeType)
+            await updateStoredSizes(imageData, add: .large)
+
+            // 成功
+            await updateStatus(imageData, to: .completed)
+            await updateUploadedAt(imageData)
+
+            // アップロード完了通知を送信
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: .imageDidUpload,
+                    object: nil,
+                    userInfo: ["imageId": imageData.id]
+                )
+            }
+
+        } catch {
+            // 失敗
+            await updateStatus(imageData, to: .failed)
+            await incrementRetryCount(imageData)
+            throw error
+        }
+    }
+
+    func reuploadEditedImage(_ imageData: ImageData, editedImage: UIImage, format: ImageFormat?) async throws {
+        // ステータスを更新
+        await updateStatus(imageData, to: .uploading)
+
+        do {
+            // 編集後は元フォーマット情報があれば使用、なければJPEG
+            let uploadFormat = format ?? .jpeg
+
+            // 3サイズを生成（Largeのみ元の形式を保持）
+            let sizes = await sizeGenerator.generateSizes(from: editedImage, preserveFormat: uploadFormat)
+
+            // thumbnail（300px）をローカル保存 - サムネイル表示用
+            if let thumbnailData = sizes[.thumbnail] {
+                await cacheManager.saveThumbnail(thumbnailData, for: imageData.id)
+                await updateStoredSizes(imageData, add: .thumbnail)
+            }
+
+            // medium（1024px）をローカル保存 - 詳細画面表示用
+            if let mediumData = sizes[.medium] {
+                await cacheManager.saveImage(mediumData, imageId: imageData.id.uuidString, size: .medium)
+                await updateStoredSizes(imageData, add: .medium)
+            }
+
+            // large（2048px）のみをR2にアップロード - Apple Pencil編集用
+            if let largeData = sizes[.large] {
+                try await uploadSize(largeData, size: .large, imageData: imageData, contentType: uploadFormat.mimeType)
+            }
+
+            // 成功
+            await updateStatus(imageData, to: .completed)
+            await updateUploadedAt(imageData)
+
+            // アップロード完了通知を送信
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: .imageDidUpload,
+                    object: nil,
+                    userInfo: ["imageId": imageData.id]
+                )
+            }
+
+        } catch {
+            // 失敗
+            await updateStatus(imageData, to: .failed)
+            await incrementRetryCount(imageData)
+            throw error
+        }
+    }
+
+    private func uploadSize(_ data: Data, size: ImageSize, imageData: ImageData, contentType: String) async throws {
         let token = try await authManager.ensureAuthenticated()
         let nonce = UUID().uuidString
 
         // アップロードURL取得
         let uploadResponse: UploadURLResponse = try await apiClient.request(
             endpoint: .uploadURL(
-                contentType: "image/jpeg",
+                contentType: contentType,
                 sizeBytes: data.count,
                 nonce: nonce
             ),
@@ -99,7 +195,7 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
         try await apiClient.uploadImage(
             to: uploadResponse.uploadUrl,
             imageData: data,
-            contentType: "image/jpeg",
+            contentType: contentType,
             requiredHeaders: uploadResponse.requiredHeaders
         )
     }
@@ -132,7 +228,14 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
             // 画像を読み込んで再試行
             if let image = imageData.image {
                 do {
-                    try await uploadImage(imageData, image: image)
+                    // 保存されたフォーマット情報を使用、なければJPEG
+                    let format: ImageFormat = {
+                        if let mimeType = imageData.originalFormat {
+                            return ImageFormat.fromMimeType(mimeType)
+                        }
+                        return .jpeg
+                    }()
+                    try await uploadImage(imageData, image: image, format: format)
                 } catch {
                     print("再アップロード失敗: \(error)")
                 }
@@ -168,6 +271,11 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
     private func incrementRetryCount(_ imageData: ImageData) {
         imageData.uploadRetryCount += 1
         imageData.lastUploadAttempt = Date()
+    }
+
+    @MainActor
+    private func updateOriginalFormat(_ imageData: ImageData, format: String) {
+        imageData.originalFormat = format
     }
 }
 

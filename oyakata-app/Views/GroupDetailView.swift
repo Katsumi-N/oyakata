@@ -10,12 +10,7 @@ import SwiftData
 
 struct GroupDetailView: View {
     let group: ImageGroup
-    
-    var imageWidth: CGFloat {
-        // iPhone と同じサイズを使用
-        return 160
-    }
-    
+
     // グループに関連するミスリストを取得
     var groupMissItems: [MissListItem] {
         return group.images.flatMap { $0.missListItems }.sorted { $0.createdAt > $1.createdAt }
@@ -79,17 +74,18 @@ struct GroupDetailView: View {
                 .cornerRadius(12)
                 .padding(.horizontal)
                 
-                // 画像横スクロール
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 16) {
-                        ForEach(group.images, id: \.id) { imageData in
-                            NavigationLink(destination: ImageDetailView(imageData: imageData)) {
-                                GroupImageItemView(imageData: imageData, imageWidth: imageWidth)
-                            }
+                // 画像グリッド（2列）
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 16),
+                    GridItem(.flexible(), spacing: 16)
+                ], spacing: 16) {
+                    ForEach(group.images, id: \.id) { imageData in
+                        NavigationLink(destination: ImageDetailView(imageData: imageData)) {
+                            GroupImageItemView(imageData: imageData)
                         }
                     }
-                    .padding(.horizontal)
                 }
+                .padding(.horizontal)
                 
                 // ミスリスト一覧セクション
                 if !groupMissItems.isEmpty {
@@ -217,54 +213,55 @@ struct GroupMissListRowView: View {
 
 struct GroupImageItemView: View {
     let imageData: ImageData
-    let imageWidth: CGFloat
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 画像
-            if let image = imageData.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: imageWidth, height: imageWidth * 0.75)
-                    .clipped()
-                    .cornerRadius(8)
-            } else {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: imageWidth, height: imageWidth * 0.75)
-                    .cornerRadius(8)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray)
-                            .font(.title2)
-                    )
-            }
-            
-            // メタデータ
-            VStack(alignment: .leading, spacing: 4) {
-                if imageData.hasAnnotations {
-                    HStack(spacing: 4) {
-                        Image(systemName: "pencil")
-                            .foregroundColor(.orange)
-                            .font(.caption2)
-                        Text("編集済み")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                    }
+        GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 8) {
+                // 画像
+                if let image = imageData.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.width * 0.75)
+                        .clipped()
+                        .cornerRadius(8)
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: geometry.size.width, height: geometry.size.width * 0.75)
+                        .cornerRadius(8)
+                        .overlay(
+                            Image(systemName: "photo")
+                                .foregroundColor(.gray)
+                                .font(.title2)
+                        )
                 }
-                
-                Text(formatTime(imageData.createdAt))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+
+                // メタデータ
+                VStack(alignment: .leading, spacing: 4) {
+                    if imageData.hasAnnotations {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil")
+                                .foregroundColor(.orange)
+                                .font(.caption2)
+                            Text("編集済み")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                        }
+                    }
+
+                    Text(formatTime(imageData.createdAt))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 4)
+            .padding(8)
+            .background(Color(.systemBackground))
+            .cornerRadius(10)
+            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
         }
-        .frame(width: imageWidth)
-        .padding(8)
-        .background(Color(.systemBackground))
-        .cornerRadius(10)
-        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .aspectRatio(1.0, contentMode: .fit)
     }
     
     private func formatTime(_ date: Date) -> String {

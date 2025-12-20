@@ -18,6 +18,9 @@ struct ImageDetailView: View {
     @State private var showingAddMissView = false
     @State private var showingTimeRecordView = false
     @State private var displayImage: UIImage?
+    @State private var isDeleting = false
+    @State private var deletionError: String?
+    @State private var showingDeletionErrorAlert = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -74,6 +77,23 @@ struct ImageDetailView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .imageDidUpdate)) { notification in
+            guard let updatedId = notification.userInfo?["imageId"] as? UUID,
+                  updatedId == imageData.id else { return }
+
+            Task {
+                await loadDisplayImage(forceRefresh: true)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .imageDidUpload)) { notification in
+            guard let uploadedId = notification.userInfo?["imageId"] as? UUID,
+                  uploadedId == imageData.id else { return }
+
+            Task {
+                // アップロード完了時に高品質版に切り替え
+                await loadDisplayImage(forceRefresh: true)
+            }
+        }
         .sheet(isPresented: $showingTimeRecordView) {
             TimeRecordEditView(imageData: imageData)
         }
@@ -87,6 +107,30 @@ struct ImageDetailView: View {
             }
         } message: {
             Text("この画像を削除しますか？この操作は元に戻せません。")
+        }
+        .alert("削除エラー", isPresented: $showingDeletionErrorAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(deletionError ?? "画像の削除に失敗しました。")
+        }
+        .overlay {
+            if isDeleting {
+                ZStack {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("削除中...")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    .padding(32)
+                    .background(.regularMaterial)
+                    .cornerRadius(16)
+                }
+            }
         }
     }
     
@@ -117,12 +161,12 @@ struct ImageDetailView: View {
         }
     }
 
-    private func loadDisplayImage() async {
+    private func loadDisplayImage(forceRefresh: Bool = false) async {
         // 詳細画面用にmediumサイズ（1024px）を取得
         let storageStrategy = ServiceLocator.shared.imageStorageStrategy
 
         do {
-            if let mediumImage = try await storageStrategy.getImage(for: imageData, size: .medium) {
+            if let mediumImage = try await storageStrategy.getImage(for: imageData, size: .medium, forceRefresh: forceRefresh) {
                 await MainActor.run {
                     displayImage = mediumImage
                 }
@@ -354,16 +398,23 @@ struct ImageDetailView: View {
     }
     
     private func deleteImage() {
-        // ファイルシステムから画像を削除
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let imageURL = documentsPath.appendingPathComponent(imageData.filePath)
-        
-        try? FileManager.default.removeItem(at: imageURL)
-        
-        // データベースから削除
-        modelContext.delete(imageData)
-        
-        dismiss()
+        Task { @MainActor in
+            isDeleting = true
+
+            do {
+                let deletionManager = ServiceLocator.shared.imageDeletionManager
+                try await deletionManager.deleteImage(imageData, modelContext: modelContext)
+
+                // 成功 - ビューを閉じる
+                isDeleting = false
+                dismiss()
+            } catch {
+                // エラー - アラート表示
+                isDeleting = false
+                deletionError = error.localizedDescription
+                showingDeletionErrorAlert = true
+            }
+        }
     }
 }
 
@@ -573,7 +624,7 @@ struct AddMissFromImageView: View {
 
     private func loadThumbnail() async {
         let storageStrategy = ServiceLocator.shared.imageStorageStrategy
-        if let thumbnail = try? await storageStrategy.getImage(for: imageData, size: .thumbnail) {
+        if let thumbnail = try? await storageStrategy.getImage(for: imageData, size: .thumbnail, forceRefresh: false) {
             await MainActor.run {
                 thumbnailImage = thumbnail
             }

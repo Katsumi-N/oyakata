@@ -13,6 +13,8 @@ protocol ImageCacheManagerProtocol {
     func saveImage(_ data: Data, imageId: String, size: ImageSize) async
     func loadImage(imageId: String, size: ImageSize) async -> UIImage?
     func clearCache() async
+    func invalidateCache(for imageId: UUID) async
+    func invalidateCache(for imageId: UUID, size: ImageSize) async
 }
 
 final class ImageCacheManager: ImageCacheManagerProtocol {
@@ -94,5 +96,44 @@ final class ImageCacheManager: ImageCacheManagerProtocol {
     func clearCache() async {
         memoryCache.removeAllObjects()
         try? fileManager.removeItem(at: cacheDirectory)
+    }
+
+    func invalidateCache(for imageId: UUID) async {
+        let imageIdString = imageId.uuidString
+
+        // メモリキャッシュから削除
+        memoryCache.removeObject(forKey: imageIdString as NSString) // thumbnail
+        for size in ImageSize.allCases {
+            let cacheKey = "\(imageIdString)_\(size.rawValue)" as NSString
+            memoryCache.removeObject(forKey: cacheKey)
+        }
+
+        // ディスクキャッシュから削除
+        // サムネイル
+        let thumbnailURL = thumbnailDirectory.appendingPathComponent("\(imageIdString)_thumbnail.jpg")
+        try? fileManager.removeItem(at: thumbnailURL)
+
+        // その他のサイズ
+        for size in ImageSize.allCases {
+            let diskPath = cacheDirectory.appendingPathComponent("\(imageIdString)_\(size.rawValue).jpg")
+            try? fileManager.removeItem(at: diskPath)
+        }
+    }
+
+    func invalidateCache(for imageId: UUID, size: ImageSize) async {
+        let imageIdString = imageId.uuidString
+        let cacheKey = "\(imageIdString)_\(size.rawValue)" as NSString
+
+        // メモリキャッシュから削除
+        memoryCache.removeObject(forKey: cacheKey)
+
+        // ディスクキャッシュから削除
+        if size == .thumbnail {
+            let url = thumbnailDirectory.appendingPathComponent("\(imageIdString)_thumbnail.jpg")
+            try? fileManager.removeItem(at: url)
+        } else {
+            let diskPath = cacheDirectory.appendingPathComponent("\(imageIdString)_\(size.rawValue).jpg")
+            try? fileManager.removeItem(at: diskPath)
+        }
     }
 }

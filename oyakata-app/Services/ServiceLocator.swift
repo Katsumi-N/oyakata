@@ -18,6 +18,8 @@ final class ServiceLocator {
     let imageCacheManager: ImageCacheManagerProtocol
     let imageUploadManager: ImageUploadManagerProtocol
     let imageStorageStrategy: ImageStorageStrategyProtocol
+    let networkMonitor: NetworkMonitorProtocol
+    let imageDeletionManager: ImageDeletionManagerProtocol
 
     private init() {
         self.keychainManager = KeychainManager()
@@ -38,6 +40,12 @@ final class ServiceLocator {
             authManager: authManager,
             apiClient: apiClient,
             cacheManager: imageCacheManager
+        )
+        self.networkMonitor = NetworkMonitor()
+        self.imageDeletionManager = ImageDeletionManager(
+            storageStrategy: imageStorageStrategy,
+            cacheManager: imageCacheManager,
+            networkMonitor: networkMonitor
         )
     }
 }

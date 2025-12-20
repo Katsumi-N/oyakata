@@ -28,6 +28,12 @@ final class ImageData {
     var lastUploadAttempt: Date?
     var uploadRetryCount: Int
     var storedSizes: [ImageSize]
+    var originalFormat: String? // 元の画像フォーマット（MIMEタイプ: "image/heic", "image/png"等）
+
+    // 削除トラッキング用
+    var deletionStatus: DeletionStatus?
+    var deletionRetryCount: Int
+    var lastDeletionAttempt: Date?
 
     @Relationship(deleteRule: .nullify)
     var taskName: TaskName?
@@ -54,6 +60,11 @@ final class ImageData {
         self.uploadStatus = .localOnly
         self.uploadRetryCount = 0
         self.storedSizes = []
+
+        // 削除トラッキングの初期化
+        self.deletionStatus = nil
+        self.deletionRetryCount = 0
+        self.lastDeletionAttempt = nil
     }
     
     var image: UIImage? {
@@ -151,4 +162,13 @@ final class ImageData {
         guard storedSizes.contains(.thumbnail) else { return nil }
         return "\(id.uuidString)_thumbnail.jpg"
     }
+}
+
+// MARK: - DeletionStatus Enum
+
+enum DeletionStatus: String, Codable {
+    case pendingDeletion    // 削除待ち（オフライン時）
+    case deletingRemote     // リモート削除中
+    case remoteFailed       // リモート削除失敗（リトライ待ち）
+    case failed             // 完全失敗（最大リトライ超過）
 }

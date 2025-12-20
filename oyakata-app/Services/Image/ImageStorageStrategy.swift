@@ -8,7 +8,7 @@
 import UIKit
 
 protocol ImageStorageStrategyProtocol {
-    func getImage(for imageData: ImageData, size: ImageSize) async throws -> UIImage?
+    func getImage(for imageData: ImageData, size: ImageSize, forceRefresh: Bool) async throws -> UIImage?
     func deleteRemoteImage(for imageData: ImageData) async throws
 }
 
@@ -27,37 +27,40 @@ final class ImageStorageStrategy: ImageStorageStrategyProtocol {
         self.cacheManager = cacheManager
     }
 
-    func getImage(for imageData: ImageData, size: ImageSize) async throws -> UIImage? {
+    func getImage(for imageData: ImageData, size: ImageSize, forceRefresh: Bool = false) async throws -> UIImage? {
         // thumbnail（300px）とmedium（1024px）はローカルのみ
         if size == .thumbnail {
             if let thumbnail = await cacheManager.loadThumbnail(for: imageData.id) {
                 return thumbnail
             }
+            // フォールバック: キャッシュになければfilePathから読み込み
+            // アップロード中や旧データの場合に有効
+            return imageData.image
         }
 
         if size == .medium {
             if let medium = await cacheManager.loadImage(imageId: imageData.id.uuidString, size: .medium) {
                 return medium
             }
-        }
-
-        // ローカルファイルが存在する場合（旧データ）
-        if imageData.remoteImageId == nil {
-            return imageData.image // 既存の実装を使用
+            // フォールバック: キャッシュになければfilePathから読み込み
+            // アップロード中や旧データの場合に有効
+            return imageData.image
         }
 
         // large（2048px）のみリモートから取得
         guard size == .large else {
-            return nil // thumbnail/mediumでローカルになければnil
+            return nil
         }
 
         guard let remoteImageId = imageData.remoteImageId else {
             return nil
         }
 
-        // キャッシュチェック
-        if let cached = await cacheManager.loadImage(imageId: remoteImageId, size: size) {
-            return cached
+        // キャッシュチェック（forceRefreshがfalseの場合のみ）
+        if !forceRefresh {
+            if let cached = await cacheManager.loadImage(imageId: remoteImageId, size: size) {
+                return cached
+            }
         }
 
         // リモートからダウンロード

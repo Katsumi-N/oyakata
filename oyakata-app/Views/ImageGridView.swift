@@ -32,6 +32,9 @@ struct ImageGridView: View {
     @State private var showingDeleteAlert = false
     @State private var groupToDelete: ImageGroup?
     @State private var imageToDelete: ImageData?
+    @State private var isDeletingGroup = false
+    @State private var deletionError: String?
+    @State private var showingDeletionErrorAlert = false
     
     var columns: [GridItem] {
         let spacing: CGFloat = 12
@@ -179,6 +182,11 @@ struct ImageGridView: View {
                 Text("この画像を削除しますか？この操作は元に戻せません。")
             }
         }
+        .alert("削除エラー", isPresented: $showingDeletionErrorAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(deletionError ?? "画像の削除に失敗しました。")
+        }
     }
     
     private func deleteGroup(_ group: ImageGroup) {
@@ -192,37 +200,37 @@ struct ImageGridView: View {
     }
     
     private func performDeleteGroup(_ group: ImageGroup) {
-        do {
+        Task { @MainActor in
+            isDeletingGroup = true
+
+            let deletionManager = ServiceLocator.shared.imageDeletionManager
+            var errors: [Error] = []
+
             for imageData in group.images {
-                deleteImageFile(imageData)
-                modelContext.delete(imageData)
+                do {
+                    try await deletionManager.deleteImage(imageData, modelContext: modelContext)
+                } catch {
+                    errors.append(error)
+                }
             }
-            try modelContext.save()
-        } catch {
-            print("グループ削除エラー: \(error)")
+
+            isDeletingGroup = false
+            if !errors.isEmpty {
+                deletionError = "一部の画像の削除に失敗しました"
+                showingDeletionErrorAlert = true
+            }
         }
     }
-    
+
     private func performDeleteImage(_ imageData: ImageData) {
-        do {
-            deleteImageFile(imageData)
-            modelContext.delete(imageData)
-            try modelContext.save()
-        } catch {
-            print("画像削除エラー: \(error)")
-        }
-    }
-    
-    private func deleteImageFile(_ imageData: ImageData) {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let imageURL = documentsPath.appendingPathComponent(imageData.filePath)
-        
-        do {
-            if FileManager.default.fileExists(atPath: imageURL.path) {
-                try FileManager.default.removeItem(at: imageURL)
+        Task { @MainActor in
+            do {
+                let deletionManager = ServiceLocator.shared.imageDeletionManager
+                try await deletionManager.deleteImage(imageData, modelContext: modelContext)
+            } catch {
+                deletionError = error.localizedDescription
+                showingDeletionErrorAlert = true
             }
-        } catch {
-            print("ファイル削除エラー: \(error)")
         }
     }
 }
@@ -364,6 +372,7 @@ struct ImageGridItemView: View {
 struct GroupGridItemView: View {
     let group: ImageGroup
     @State private var thumbnail: UIImage?
+    @State private var refreshTrigger = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -421,8 +430,21 @@ struct GroupGridItemView: View {
                     .zIndex(1)
                 }
             }
-            .task {
+            .task(id: refreshTrigger) {
                 await loadThumbnail()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .imageDidUpdate)) { notification in
+                guard let updatedId = notification.userInfo?["imageId"] as? UUID,
+                      updatedId == group.representativeImage.id else { return }
+
+                refreshTrigger = UUID()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .imageDidUpload)) { notification in
+                guard let uploadedId = notification.userInfo?["imageId"] as? UUID,
+                      uploadedId == group.representativeImage.id else { return }
+
+                // アップロード完了時に高品質版のサムネイルに切り替え
+                refreshTrigger = UUID()
             }
 
             // メタデータ（「グループ」表示なし）
@@ -470,7 +492,7 @@ struct GroupGridItemView: View {
 
     private func loadThumbnail() async {
         let storageStrategy = ServiceLocator.shared.imageStorageStrategy
-        thumbnail = try? await storageStrategy.getImage(for: group.representativeImage, size: .thumbnail)
+        thumbnail = try? await storageStrategy.getImage(for: group.representativeImage, size: .thumbnail, forceRefresh: false)
     }
 }
 

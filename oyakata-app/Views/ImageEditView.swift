@@ -68,10 +68,11 @@ struct ImageEditView: View {
     
     private func loadOptimizedImage() async {
         // Apple Pencil編集用にlargeサイズ（2048px）をCDNから取得
+        // forceRefresh: trueで常に最新のリモート画像を取得
         let storageStrategy = ServiceLocator.shared.imageStorageStrategy
 
         do {
-            if let largeImage = try await storageStrategy.getImage(for: imageData, size: .large) {
+            if let largeImage = try await storageStrategy.getImage(for: imageData, size: .large, forceRefresh: true) {
                 optimizedImage = largeImage
                 return
             }
@@ -87,25 +88,30 @@ struct ImageEditView: View {
                 let maxDimension: CGFloat = 2048 // largeサイズと同じ
                 let size = originalImage.size
 
-                if max(size.width, size.height) <= maxDimension {
+                // 実際のピクセルサイズを計算（scale考慮）
+                let actualWidth = size.width * originalImage.scale
+                let actualHeight = size.height * originalImage.scale
+
+                if max(actualWidth, actualHeight) <= maxDimension {
                     continuation.resume(returning: originalImage)
                     return
                 }
-                
-                let aspectRatio = size.width / size.height
+
+                let aspectRatio = actualWidth / actualHeight
                 let newSize: CGSize
-                
-                if size.width > size.height {
+
+                if actualWidth > actualHeight {
                     newSize = CGSize(width: maxDimension, height: maxDimension / aspectRatio)
                 } else {
                     newSize = CGSize(width: maxDimension * aspectRatio, height: maxDimension)
                 }
-                
+
+                // メモリ効率的なリサイズ（scale = 1.0で作成）
                 let renderer = UIGraphicsImageRenderer(size: newSize)
                 let resizedImage = renderer.image { _ in
                     originalImage.draw(in: CGRect(origin: .zero, size: newSize))
                 }
-                
+
                 continuation.resume(returning: resizedImage)
             }
         }
@@ -175,17 +181,45 @@ struct ImageEditView: View {
         
         // 編集済み画像を保存（圧縮強化）
         guard let processedImageData = editedImage.jpegData(compressionQuality: 0.6) else { return }
-        
+
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsPath.appendingPathComponent(self.imageData.filePath)
-        
+
         do {
             try processedImageData.write(to: fileURL)
-            
+
             // データベースの情報を更新
             self.imageData.updateAnnotationStatus(true)
-            
+
+            // キャッシュを無効化
+            let cacheManager = ServiceLocator.shared.imageCacheManager
+            await cacheManager.invalidateCache(for: imageData.id)
+
+            // CDNに再アップロード
+            let uploadManager = ServiceLocator.shared.imageUploadManager
+            do {
+                // ImageDataに保存されたフォーマット情報を使用、なければJPEG
+                let format: ImageFormat? = {
+                    if let mimeType = imageData.originalFormat {
+                        return ImageFormat.fromMimeType(mimeType)
+                    }
+                    return nil
+                }()
+                try await uploadManager.reuploadEditedImage(imageData, editedImage: editedImage, format: format)
+            } catch {
+                print("CDNへの再アップロード失敗: \(error)")
+                // ローカル保存は成功しているので、エラーでもdismissする
+                // バックグラウンドでリトライされる
+            }
+
             dismiss()
+
+            // 画像更新の通知を送信
+            NotificationCenter.default.post(
+                name: .imageDidUpdate,
+                object: nil,
+                userInfo: ["imageId": imageData.id]
+            )
         } catch {
             print("編集済み画像の保存に失敗しました: \(error)")
         }

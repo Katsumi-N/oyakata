@@ -16,6 +16,7 @@ enum NetworkError: Error, LocalizedError {
     case tokenExpired
     case nonceReused
     case notFound
+    case offline
     case unknown(Error)
 
     var errorDescription: String? {
@@ -36,6 +37,8 @@ enum NetworkError: Error, LocalizedError {
             return "Nonceが再利用されました"
         case .notFound:
             return "リソースが見つかりません"
+        case .offline:
+            return "オフラインです。オンラインになったときに自動的に削除されます。"
         case .unknown(let error):
             return "不明なエラー: \(error.localizedDescription)"
         }
