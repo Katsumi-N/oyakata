@@ -27,19 +27,38 @@ enum ImageSize: String, Codable, CaseIterable {
 
 protocol ImageSizeGeneratorProtocol {
     func generateSizes(from image: UIImage, preserveFormat: ImageFormat) async -> [ImageSize: Data]
+    func generateSizes(from image: UIImage, preserveFormat: ImageFormat, originalData: Data?) async -> [ImageSize: Data]
 }
 
 final class ImageSizeGenerator: ImageSizeGeneratorProtocol {
     func generateSizes(from image: UIImage, preserveFormat: ImageFormat) async -> [ImageSize: Data] {
+        await generateSizes(from: image, preserveFormat: preserveFormat, originalData: nil)
+    }
+
+    func generateSizes(from image: UIImage, preserveFormat: ImageFormat, originalData: Data?) async -> [ImageSize: Data] {
         await withTaskGroup(of: (ImageSize, Data?).self) { group in
             var result: [ImageSize: Data] = [:]
 
             for size in ImageSize.allCases {
                 group.addTask {
+                    // Largeサイズで元データがある場合は、リサイズせずに元データをそのまま使用
+                    if size == .large, let originalData = originalData {
+                        print("✅ Large: 元の画像データをそのまま使用（\(originalData.count) bytes）")
+                        return (size, originalData)
+                    }
+
+                    // Thumbnail/Mediumはリサイズして生成
                     let resized = await self.resize(image, to: size.maxDimension)
+
                     // Largeサイズのみ元の形式を保持、Thumbnail/MediumはJPEG
                     let format: ImageFormat = (size == .large) ? preserveFormat : .jpeg
-                    let data = ImageFormatHandler.encode(resized, as: format, quality: self.compressionQuality(for: size))
+                    let quality = self.compressionQuality(for: size, format: format)
+                    let data = ImageFormatHandler.encode(resized, as: format, quality: quality)
+
+                    if let data = data {
+                        print("📦 \(size.rawValue) (\(format.mimeType)): \(data.count) bytes (quality: \(quality))")
+                    }
+
                     return (size, data)
                 }
             }
@@ -90,11 +109,15 @@ final class ImageSizeGenerator: ImageSizeGeneratorProtocol {
         }
     }
 
-    private func compressionQuality(for size: ImageSize) -> CGFloat {
+    private func compressionQuality(for size: ImageSize, format: ImageFormat) -> CGFloat {
         switch size {
-        case .thumbnail: return 0.6
-        case .medium: return 0.7
-        case .large: return 0.85
+        case .thumbnail:
+            return 0.6
+        case .medium:
+            return 0.7
+        case .large:
+            // HEICは高圧縮なので品質を下げる
+            return format == .heic ? 0.6 : 0.8
         }
     }
 }

@@ -17,7 +17,7 @@ enum ImageUploadStatus: String, Codable {
 }
 
 protocol ImageUploadManagerProtocol {
-    func uploadImage(_ imageData: ImageData, image: UIImage, format: ImageFormat) async throws
+    func uploadImage(_ imageData: ImageData, image: UIImage, format: ImageFormat, originalData: Data?) async throws
     func uploadPDF(_ imageData: ImageData, pdfData: Data, format: ImageFormat) async throws
     func reuploadEditedImage(_ imageData: ImageData, editedImage: UIImage, format: ImageFormat?) async throws
     func retryFailedUploads(modelContext: ModelContext) async
@@ -41,13 +41,13 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
         self.cacheManager = cacheManager
     }
 
-    func uploadImage(_ imageData: ImageData, image: UIImage, format: ImageFormat) async throws {
+    func uploadImage(_ imageData: ImageData, image: UIImage, format: ImageFormat, originalData: Data? = nil) async throws {
         // ステータスを更新
         await updateStatus(imageData, to: .uploading)
 
         do {
-            // 3サイズを生成
-            let sizes = await sizeGenerator.generateSizes(from: image, preserveFormat: format)
+            // 3サイズを生成（元データがあればLargeで使用）
+            let sizes = await sizeGenerator.generateSizes(from: image, preserveFormat: format, originalData: originalData)
 
             // thumbnail（300px）をローカル保存 - サムネイル表示用
             if let thumbnailData = sizes[.thumbnail] {
@@ -235,7 +235,7 @@ final class ImageUploadManager: ImageUploadManagerProtocol {
                         }
                         return .jpeg
                     }()
-                    try await uploadImage(imageData, image: image, format: format)
+                    try await uploadImage(imageData, image: image, format: format, originalData: nil)
                 } catch {
                     print("再アップロード失敗: \(error)")
                 }

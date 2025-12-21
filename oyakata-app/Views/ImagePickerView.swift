@@ -15,7 +15,8 @@ struct ImagePickerView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var selectedPHPickerResults: [PHPickerResult] = []
+    @State private var showingPHPicker = false
     @State private var selectedTags: Set<TagType> = []
     @State private var taskNameInput: String = ""
     @State private var showingDocumentPicker = false
@@ -82,11 +83,9 @@ struct ImagePickerView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         
                         VStack(spacing: 12) {
-                            PhotosPicker(
-                                selection: $selectedItems,
-                                maxSelectionCount: 10,
-                                matching: .images
-                            ) {
+                            Button {
+                                showingPHPicker = true
+                            } label: {
                                 Label("フォトライブラリから選択", systemImage: "photo.on.rectangle")
                                     .font(.body)
                                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -105,7 +104,7 @@ struct ImagePickerView: View {
                             .cornerRadius(10)
                         }
                         
-                        let totalSelected = selectedItems.count + selectedDocuments.count
+                        let totalSelected = selectedPHPickerResults.count + selectedDocuments.count
                         if totalSelected > 0 {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
@@ -135,7 +134,7 @@ struct ImagePickerView: View {
                     Button("保存") {
                         saveImages()
                     }
-                    .disabled(selectedItems.isEmpty && selectedDocuments.isEmpty || taskNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(selectedPHPickerResults.isEmpty && selectedDocuments.isEmpty || taskNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
@@ -145,6 +144,16 @@ struct ImagePickerView: View {
             allowsMultipleSelection: true
         ) { result in
             handleDocumentPickerResult(result)
+        }
+        .sheet(isPresented: $showingPHPicker) {
+            PHPickerViewControllerWrapper(
+                isPresented: $showingPHPicker,
+                maxSelectionCount: 10,
+                onSelection: { results in
+                    selectedPHPickerResults = results
+                }
+            )
+            .ignoresSafeArea()
         }
     }
     
@@ -174,35 +183,20 @@ struct ImagePickerView: View {
     
     private func saveImages() {
         Task {
-            let totalCount = selectedItems.count + selectedDocuments.count
+            let totalCount = selectedPHPickerResults.count + selectedDocuments.count
             let groupId = totalCount > 1 ? UUID() : nil
             let groupCreatedAt = totalCount > 1 ? Date() : nil
             
-            // PhotosPickerの画像を処理
-            for item in selectedItems {
-                // データをロードする前にPhotoPickerItemからフォーマットを検出
-                let expectedFormat = ImageFormatHandler.detectFormat(from: item)
-                print("📸 PhotosPicker: アイテムから検出されたフォーマット = \(expectedFormat)")
+            // PHPickerの画像を処理
+            for result in selectedPHPickerResults {
+                if let (originalData, format, uiImage) = await PHPickerResultHandler.extractImageData(from: result) {
+                    print("📸 PHPicker: Format = \(format.mimeType), Size = \(originalData.count) bytes")
 
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let uiImage = UIImage(data: data) {
-                    print("📸 PhotosPicker: データ読み込み成功（\(data.count) bytes）")
-                    // ロード後のデータから実際のフォーマットを検出
-                    let actualFormat = ImageFormatHandler.detectFormat(from: data)
-                    print("📸 PhotosPicker: データから検出されたフォーマット = \(actualFormat)")
-
-                    // 実際のフォーマットを使用（PhotosPickerが自動変換する場合があるため）
-                    // ただし、元の形式がHEICの場合は、それを保持したい意図として扱う
-                    let format: ImageFormat
-                    if expectedFormat == .heic && actualFormat == .jpeg {
-                        print("⚠️ PhotosPicker: HEICがJPEGに自動変換されました。元の形式を保持するにはDocumentPickerを使用してください。")
-                        // HEICとしてアップロードを試みる（JPEG→HEICエンコード）
-                        format = expectedFormat
-                    } else {
-                        format = actualFormat
-                    }
-
-                    await saveImageToDocuments(uiImage, format: format, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                    // 元のデータをそのまま保持してアップロード
+                    // ImageSizeGeneratorが適切なリサイズを行うため、ここでのoptimizeImageは不要
+                    await saveImageToDocuments(uiImage, format: format, originalData: originalData, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                } else {
+                    print("⚠️ PHPicker: データ抽出に失敗しました")
                 }
             }
             
@@ -225,7 +219,8 @@ struct ImagePickerView: View {
                         } else {
                             // 通常の画像ファイル
                             if let uiImage = UIImage(data: data) {
-                                await saveImageToDocuments(uiImage, format: format, groupId: groupId, groupCreatedAt: groupCreatedAt)
+                                // 元のデータを保持してアップロード
+                                await saveImageToDocuments(uiImage, format: format, originalData: data, groupId: groupId, groupCreatedAt: groupCreatedAt)
                             }
                         }
                     } catch {
@@ -240,10 +235,7 @@ struct ImagePickerView: View {
         }
     }
     
-    private func saveImageToDocuments(_ image: UIImage, format: ImageFormat, groupId: UUID? = nil, groupCreatedAt: Date? = nil) async {
-        // 画像をメモリ効率的にリサイズ（元画像用）
-        let optimizedImage = await optimizeImage(image)
-
+    private func saveImageToDocuments(_ image: UIImage, format: ImageFormat, originalData: Data?, groupId: UUID? = nil, groupCreatedAt: Date? = nil) async {
         let fileName = "\(UUID().uuidString).jpg"
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsPath.appendingPathComponent(fileName)
@@ -270,8 +262,8 @@ struct ImagePickerView: View {
                     let uploadManager = ServiceLocator.shared.imageUploadManager
                     let cacheManager = ServiceLocator.shared.imageCacheManager
 
-                    // ImageUploadManagerで3サイズ生成・保存・アップロード
-                    try await uploadManager.uploadImage(imageDataModel, image: optimizedImage, format: format)
+                    // ImageUploadManagerで3サイズ生成・保存・アップロード（元データを渡す）
+                    try await uploadManager.uploadImage(imageDataModel, image: image, format: format, originalData: originalData)
 
                     // thumbnail (300px)をfilePathにも保存（後方互換性のため）
                     if let thumbnailData = try? await cacheManager.loadThumbnail(for: imageDataModel.id),
@@ -281,7 +273,7 @@ struct ImagePickerView: View {
                 } catch {
                     print("画像のアップロードに失敗しました: \(error)")
                     // エラー時はローカルにフルサイズを保存（フォールバック）
-                    if let fallbackData = optimizedImage.jpegData(compressionQuality: 0.7) {
+                    if let fallbackData = image.jpegData(compressionQuality: 0.7) {
                         try? fallbackData.write(to: fileURL)
                     }
                 }

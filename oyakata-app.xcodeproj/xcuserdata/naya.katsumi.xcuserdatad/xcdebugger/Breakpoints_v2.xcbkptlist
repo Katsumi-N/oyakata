@@ -32,8 +32,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "42"
             endingLineNumber = "42"
-            landmarkName = "ImageUploadManager"
-            landmarkType = "3">
+            landmarkName = "init(authManager:apiClient:sizeGenerator:cacheManager:)"
+            landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

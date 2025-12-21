@@ -21,6 +21,7 @@ struct ImageDetailView: View {
     @State private var isDeleting = false
     @State private var deletionError: String?
     @State private var showingDeletionErrorAlert = false
+    @State private var showingFullScreenImage = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -132,6 +133,11 @@ struct ImageDetailView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showingFullScreenImage) {
+            if let image = displayImage {
+                ZoomableImageView(image: image)
+            }
+        }
     }
     
     @ViewBuilder
@@ -145,6 +151,9 @@ struct ImageDetailView: View {
                            maxHeight: geometry.size.height * 0.6)
                     .cornerRadius(12)
                     .shadow(radius: 4)
+                    .onTapGesture {
+                        showingFullScreenImage = true
+                    }
             } else {
                 Rectangle()
                     .fill(Color.gray.opacity(0.3))
